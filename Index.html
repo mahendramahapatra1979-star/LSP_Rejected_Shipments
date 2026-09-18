@@ -1,0 +1,2382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSP Rejected Shipment Tracker</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics-compat.js"></script>
+
+    <style>
+        /* Compact Global Styling */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%); margin: 0; padding: 15px; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #333; box-sizing: border-box; }
+        .container { background-color: rgba(255, 255, 255, 0.96); padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 98%; max-width: 1400px; backdrop-filter: blur(10px); }
+        h1 { text-align: center; color: #2c3e50; margin: 0 0 10px 0; font-size: 18px; font-weight: 600; }
+        h2 { text-align: center; color: #2c3e50; margin: 0 0 15px 0; font-size: 16px; }
+        h3 { color: #34495e; padding-bottom: 4px; margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        
+        .form-group { margin-bottom: 8px; }
+        .form-group label { display: block; margin-bottom: 2px; font-weight: 600; font-size: 11px; color: #555; text-transform: uppercase; }
+        
+        .form-group input, .form-group select { width: 100%; padding: 4px 8px; border: 1px solid #ccd1d9; border-radius: 4px; box-sizing: border-box; font-size: 11px; transition: all 0.2s ease; height: 26px; }
+        .form-group input:focus, .form-group select:focus { border-color: #8ec5fc; outline: none; box-shadow: 0 0 4px rgba(142, 197, 252, 0.4); }
+        
+        .date-range-container { display: flex; gap: 4px; }
+        .date-range-container input[type="date"] { flex: 1; padding: 2px 4px; font-size: 10px; height: 26px; }
+
+        .password-container { display: flex; }
+        .password-container input { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: none; }
+        .password-container button { padding: 0 10px; background-color: #f1f2f6; border: 1px solid #ccd1d9; color: #555; cursor: pointer; border-top-right-radius: 4px; border-bottom-right-radius: 4px; font-weight: bold; font-size: 10px; height: 26px; }
+        
+        .btn-primary, .btn-save { width: 100%; padding: 6px; color: white; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; margin-top: 5px; transition: all 0.2s; }
+        .btn-primary { background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%); height: 32px; }
+        .btn-save { background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%); }
+        .btn-save:disabled { background: #b2bec3 !important; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-primary:hover, .btn-save:not(:disabled):hover { opacity: 0.9; }
+        
+        .action-btn { background: #00b894; color: white; border: none; padding: 4px 10px; border-radius: 3px; font-size: 10px; cursor: pointer; font-weight: bold; transition: opacity 0.2s; }
+        .action-btn.copy { background: #6c5ce7; }
+        .action-btn.mail { background: #e84393; }
+        .action-btn:hover { opacity: 0.8; }
+
+        #login-page { max-width: 320px; margin: auto; padding: 20px; }
+        #tracker-page { display: none; }
+        
+        .upload-section { background-color: #f8f9fa; border: 1.5px dashed #a5b1c2; border-radius: 6px; padding: 10px; text-align: center; margin-bottom: 12px; }
+        .upload-section label { font-size: 13px; font-weight: bold; color: #2d3436; margin-bottom: 5px; display: block; }
+        .upload-section input[type="file"] { font-size: 11px; height: auto; padding: 0; border: none; background: #fff; border: 1px solid #ccd1d9; border-radius: 4px; }
+
+        .main-layout { display: flex; gap: 15px; align-items: flex-start; }
+        .form-side { flex: 1.2; }
+        .table-side { flex: 2; background-color: #fff; border: 1px solid #ccd1d9; border-radius: 6px; padding: 10px; box-shadow: 0 1px 5px rgba(0,0,0,0.02); display: flex; flex-direction: column; max-height: 520px; }
+
+        .section-box { background-color: #ffffff; border: 1px solid #e1e8ed; border-radius: 6px; padding: 12px; box-shadow: 0 1px 5px rgba(0,0,0,0.02); margin-bottom: 12px; }
+
+        /* Checker Tracking Boxes */
+        .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 15px; }
+        .stat-card { background: #f1f2f6; border: 1px solid #ccd1d9; border-radius: 6px; padding: 10px; text-align: center; font-weight: bold; }
+        .stat-card span { display: block; font-size: 20px; margin-top: 5px; }
+        .stat-card.total { color: #2980b9; border-color: #2980b9; background: #eaf2f8; }
+        .stat-card.scanned { color: #27ae60; border-color: #27ae60; background: #eafaf1; }
+        .stat-card.pending { color: #f39c12; border-color: #f39c12; background: #fef5e7; }
+        .stat-card.excess { color: #d63031; border-color: #d63031; background: #fadedf; }
+
+        .list-box { background: #fff; border: 1px solid #ccd1d9; border-radius: 4px; height: 120px; overflow-y: auto; padding: 5px; font-size: 10px; font-family: monospace; white-space: pre-wrap;}
+        .list-box.excess-box { color: #d63031; font-weight: bold; }
+
+        .table-container { width: 100%; overflow-y: auto; overflow-x: auto; border: 1px solid #e1e8ed; border-radius: 4px; flex-grow: 1; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 9px; text-align: center; }
+        .data-table th, .data-table td { border: 1px solid #e1e8ed; padding: 6px 8px; white-space: nowrap; }
+        .data-table th { background-color: #2c3e50; color: white; position: sticky; top: 0; z-index: 1; }
+        .data-table tr:nth-child(even) { background-color: #f8f9fa; }
+        .data-table tr:hover { background-color: #eef5f9; }
+        
+        .auto-field input { background-color: #f1f2f6; color: #4e565c; cursor: not-allowed; font-weight: bold; }
+        
+        .badge-role { display: inline-block; padding: 4px 10px; background-color: #2c3e50; color: #fff; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .user-highlight { color: #f1c40f; }
+
+        .admin-nav { display: flex; gap: 10px; margin-bottom: 15px; }
+        .admin-nav button { flex: 1; padding: 10px; font-size: 12px; font-weight: bold; cursor: pointer; border: 1px solid #ccd1d9; border-radius: 4px; background: #f8f9fa; color: #2c3e50; transition: all 0.3s ease; text-transform: uppercase; }
+        .admin-nav button:hover { background: #e1e8ed; }
+        .admin-nav button.active { background: #2c3e50; color: white; border-color: #2c3e50; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .admin-tab-content { display: none; animation: fadeIn 0.3s; }
+        .admin-tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        .header-flex { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #8ec5fc; margin-bottom: 10px; padding-bottom: 4px; }
+        @media (max-width: 992px) { .main-layout { flex-direction: column; } .form-side, .table-side { flex: unset; width: 100%; } }
+    </style>
+</head>
+<body>
+
+    <!-- CUSTOM CONFIRM MODAL FOR BULK DELETE -->
+    <div id="custom-confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:25px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3); text-align:center; max-width: 350px;">
+            <h3 style="margin-top:0; color:#d63031; border-bottom:none;">WARNING</h3>
+            <p style="font-size:14px; color:#333; margin-bottom:20px; font-weight:bold;">Do you want to delete selected data?</p>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button onclick="executeBulkDelete()" style="flex:1; padding:8px; background:#27ae60; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">YES</button>
+                <button onclick="closeConfirmModal()" style="flex:1; padding:8px; background:#e17055; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">NO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPLOAD SUCCESS & EMAIL MODAL -->
+    <div id="upload-success-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:25px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.4); text-align:center; max-width: 400px; width: 90%;">
+            <h3 style="margin-top:0; color:#27ae60; border-bottom:none; font-size: 20px;">UPLOAD SUCCESSFUL!</h3>
+            <p style="font-size:14px; color:#333; margin-bottom:5px; font-weight:bold;">Reference Number Generated:</p>
+            <h2 id="success-ref-number" style="color:#8e44ad; margin: 10px 0; font-size: 26px; border: 2px dashed #8e44ad; padding: 10px; border-radius: 6px; background: #fdf5ff;"></h2>
+            <p id="success-msg-details" style="font-size:12px; color:#555; margin-bottom:20px; white-space: pre-wrap; background: #f1f2f6; padding: 10px; border-radius: 4px; text-align: left; max-height: 100px; overflow-y: auto;"></p>
+            <button onclick="triggerEmailAndClose()" style="width:100%; padding:12px; background:linear-gradient(135deg, #0984e3 0%, #74b9ff 100%); color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; font-size: 14px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">OK (SEND EMAIL)</button>
+        </div>
+    </div>
+
+    <!-- REPORT MODAL -->
+    <div id="report-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width: 95%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; box-shadow:0 5px 15px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #8ec5fc; padding-bottom:10px; margin-bottom:15px;">
+                <h2 style="margin:0; font-size: 16px; color:#2c3e50;">📊 UPLOAD REFERENCE REPORTS</h2>
+                <button onclick="closeReportModal()" style="background:#d63031; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">X</button>
+            </div>
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
+                <label style="font-weight:bold; font-size:12px;">DATE RANGE:</label>
+                <div class="date-range-container">
+                    <input type="date" id="report-date-from" onchange="generateReport()">
+                    <span style="font-size:12px; font-weight:bold; padding-top:4px;">TO</span>
+                    <input type="date" id="report-date-to" onchange="generateReport()">
+                </div>
+                <button onclick="generateReport()" style="padding: 6px 12px; background: #0984e3; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px; margin-left: 10px;">SEARCH</button>
+            </div>
+            <div style="overflow-y: auto; flex-grow: 1; border: 1px solid #e1e8ed; border-radius: 4px;">
+                <table class="data-table" style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th style="width: 100px;">UPLOAD DATE</th>
+                            <th style="width: 150px;">REFERENCE NUMBER</th>
+                            <th style="width: 80px;">TOTAL QTY</th>
+                            <th>TRACKING IDs (AWBs)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-modal-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- LOGIN PAGE -->
+    <div class="container" id="login-page">
+        <h2>LOGIN</h2>
+        <div class="form-group">
+            <label>BLDG #</label>
+            <select id="login-bldg" onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('role').focus(); }">
+                <option value="">SELECT BLDG</option>
+                <option value="ALL">ALL (Admin Only)</option>
+                <option value="Bldg#3">Bldg#3</option>
+                <option value="Bldg#5">Bldg#5</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>ROLE</label>
+            <select id="role" onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('username').focus(); }">
+                <option value="">SELECT THE ROLE</option>
+                <option value="MAKER">MAKER</option>
+                <option value="CHECKER">CHECKER</option>
+                <option value="ADMIN">ADMIN</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>USER NAME</label>
+            <input type="text" id="username" placeholder="ENTER USERNAME" onkeydown="if(event.key === 'Enter') { event.preventDefault(); document.getElementById('password').focus(); }">
+        </div>
+        <div class="form-group">
+            <label>PASSWORD</label>
+            <div class="password-container">
+                <input type="password" id="password" placeholder="ENTER PASSWORD" style="text-transform: none;" onkeydown="if(event.key === 'Enter') { event.preventDefault(); doLogin(); }">
+                <button type="button" onclick="togglePassword()">SHOW</button>
+            </div>
+        </div>
+        <button class="btn-primary" onclick="doLogin()">LOG IN</button>
+    </div>
+
+    <!-- MAIN TRACKER APP -->
+    <div class="container" id="tracker-page">
+        <h1>LSP REJECTED SHIPMENT TRACKER</h1>
+        <center style="margin-bottom: 12px;">
+            <div class="badge-role" style="vertical-align: middle;">
+                <span id="current-user-role">ROLE: MAKER</span>
+                <span style="margin: 0 5px;">|</span>
+                <span id="current-user-name" class="user-highlight">USER: ADMIN</span>
+            </div>
+            <button onclick="openReportModal()" style="margin-left: 10px; padding: 4px 12px; font-size: 11px; background: #8e44ad; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">📊 REPORTS</button>
+            <button onclick="refreshAllData(this)" style="margin-left: 5px; padding: 4px 12px; font-size: 11px; background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">🔄 REFRESH</button>
+            <button onclick="doLogout()" style="margin-left: 5px; padding: 4px 12px; font-size: 11px; background: linear-gradient(135deg, #d63031 0%, #ff7675 100%); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">LOGOUT</button>
+        </center>
+        
+        <div class="upload-section" id="maker-upload-block">
+            <label>PLEASE UPLOAD INCREFF MANIFEST CSV REPORT FIRST</label>
+            <div style="display: flex; gap: 10px; justify-content: center; align-items: center; max-width: 550px; margin: 0 auto;">
+                <input type="file" id="csv-upload" accept=".csv" style="flex: 1; padding: 4px; background: #fff; border: 1px solid #ccd1d9; border-radius: 4px;">
+                <button id="btn-manifest-upload" onclick="processManifestUpload(this)" style="background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%); color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">UPLOAD</button>
+                <button onclick="clearManifestDatabase()" style="background: linear-gradient(135deg, #ff7675 0%, #d63031 100%); color: white; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">CLEAR DATABASE</button>
+            </div>
+            <span style="font-size: 10px; color: #555; display: block; margin-top: 5px;">Total Records in DB: <strong id="manifest-db-count">0</strong></span>
+        </div>
+
+        <!-- MAKER VIEW -->
+        <div id="maker-view-container" style="display: none;">
+            <div class="main-layout" id="maker-layout-block">
+                <div class="form-side">
+                    <!-- UNIFIED CSV UPLOAD SECTION -->
+                    <div class="section-box" style="text-align: center; background-color: #eaf2f8; border-color: #8ec5fc;">
+                        <h3 style="margin-bottom: 8px; color: #2980b9;">UNIFIED BULK DATA UPLOAD (CSV)</h3>
+                        <span class="helper-text" style="margin-bottom: 12px; color: #d63031; font-weight: bold;">* Data will auto-calculate Ageing and save as CLOSED. Reference number will be generated automatically and mailed to Admin.</span>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px; align-items: center; max-width: 400px; margin: 0 auto;">
+                            <button class="btn-primary" onclick="downloadUnifiedBulkTemplate()" style="font-size: 11px; height: 32px;">📥 DOWNLOAD TEMPLATE</button>
+                            <input type="file" id="unified-bulk-csv-upload" accept=".csv" style="width: 100%; font-size: 11px; padding: 4px; border: 1px solid #ccd1d9; border-radius: 4px; background: #fff; box-sizing: border-box;">
+                            <button id="btn-maker-upload" class="btn-save" onclick="processUnifiedBulkUpload(this)" style="font-size: 12px; height: 36px; background: linear-gradient(135deg, #e17055 0%, #fab1a0 100%);">🚀 PROCESS & UPLOAD</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-side">
+                    <div class="header-flex">
+                        <h3>DASHBOARD LOG</h3>
+                        <div style="display: flex; gap: 5px;">
+                            <button onclick="copyToExcel('maker')" class="action-btn copy">📋 COPY</button>
+                            <button onclick="downloadToCSV('maker')" class="action-btn">📥 DOWNLOAD CSV</button>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1.8fr 1fr; gap: 5px; margin-bottom: 10px; background: #f8f9fa; padding: 6px; border-radius: 4px; border: 1px solid #ccd1d9;">
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">BLD Filter</label><input type="text" id="maker-filter-bld" placeholder="BLD" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">AWB Filter</label><input type="text" id="maker-filter-awb" placeholder="AWB" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">Ref No Filter</label><input type="text" id="maker-filter-ref" placeholder="REF NO" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">RTO Date (FROM - TO)</label>
+                            <div class="date-range-container">
+                                <input type="date" id="maker-filter-rto-from" onchange="updateDataTable()">
+                                <input type="date" id="maker-filter-rto-to" onchange="updateDataTable()">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">Status Filter</label>
+                            <select id="maker-filter-status" onchange="updateDataTable()">
+                                <option value="">ALL</option>
+                                <option value="CLOSED">CLOSED</option>
+                                <option value="EXCESS">EXCESS</option>
+                                <option value="RTO_RECEIVED">RTO RECEIVED</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table" id="saved-data-table">
+                            <thead>
+                                <tr>
+                                    <th>SL NO</th>
+                                    <th>REF NO</th>
+                                    <th>AWB</th>
+                                    <th>BLD NO</th>
+                                    <th>MANIFEST ID</th>
+                                    <th>CANCEL DATE</th>
+                                    <th>RTO DATE</th>
+                                    <th>STATUS</th>
+                                    <th>RECEIVING STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="saved-data-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div> 
+
+        <!-- CHECKER VIEW -->
+        <div id="checker-layout" style="display: none;">
+            <div class="section-box" style="margin-bottom: 15px;">
+                <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 15px; text-align: center;">CHECKER VERIFICATION & RECEIVING</h3>
+                
+                <div style="display: flex; gap: 15px; justify-content: center; align-items: flex-end; flex-wrap: wrap; margin-bottom: 15px;">
+                    <div class="form-group" style="width: 250px; margin: 0;">
+                        <label style="font-size: 11px; font-weight: bold; color: #e17055;">1. ENTER REFERENCE NUMBER</label>
+                        <input type="text" id="checker-ref-input" placeholder="E.g., RTO/2026/000001" style="height: 34px; font-size: 14px; font-weight: bold; text-align: center; border: 2px solid #e17055;" onkeydown="if(event.key === 'Enter') loadCheckerReference()">
+                    </div>
+                    <button class="btn-primary" onclick="loadCheckerReference()" style="width: auto; height: 34px; margin: 0; padding: 0 20px;">LOAD BATCH</button>
+
+                    <div style="width: 1px; height: 34px; background: #ccd1d9; margin: 0 10px;"></div>
+
+                    <div class="form-group" style="width: 300px; margin: 0;">
+                        <label style="font-size: 11px; font-weight: bold; color: #27ae60;">2. SCAN AWB NUMBER</label>
+                        <input type="text" id="checker-awb-input" placeholder="SCAN BARCODE HERE" style="height: 34px; font-size: 14px; font-weight: bold; text-align: center; border: 2px solid #27ae60;" disabled>
+                    </div>
+                </div>
+
+                <div class="stat-cards">
+                    <div class="stat-card total">TOTAL RECORDS <span id="chk-total">0</span></div>
+                    <div class="stat-card scanned">SCANNED <span id="chk-scanned">0</span></div>
+                    <div class="stat-card pending">PENDING <span id="chk-pending">0</span></div>
+                    <div class="stat-card excess">EXCESS <span id="chk-excess">0</span></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label style="font-size: 11px; font-weight: bold; color: #f39c12; margin-bottom: 4px; display: block;">PENDING AWBS:</label>
+                        <div id="chk-pending-list" class="list-box"></div>
+                    </div>
+                    <div>
+                        <label style="font-size: 11px; font-weight: bold; color: #d63031; margin-bottom: 4px; display: block;">EXCESS AWBS:</label>
+                        <div id="chk-excess-list" class="list-box excess-box"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-box">
+                <div class="header-flex">
+                    <h3>BATCH DATA LOG</h3>
+                    <div style="display: flex; gap: 5px;">
+                        <button onclick="copyToExcel('checker')" class="action-btn copy">📋 COPY</button>
+                        <button onclick="downloadToCSV('checker')" class="action-btn">📥 DOWNLOAD CSV</button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>SL NO</th>
+                                <th>REF NO</th>
+                                <th>BLD NO</th>
+                                <th>AWB</th>
+                                <th>Manifest id</th>
+                                <th>CHANNEL</th>
+                                <th>Transporter Name</th>
+                                <th>Channel Order ID</th>
+                                <th>Manifested Date</th>
+                                <th>Cancel by LSP Date</th>
+                                <th>Device's Error</th>
+                                <th>REMARKS</th>
+                                <th>RTO/Re-Pickup Date</th>
+                                <th>Status</th>
+                                <th>Ageing</th>
+                                <th style="background-color: #27ae60;">RECEIVING STATUS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="checker-data-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ADMIN VIEW -->
+        <div id="admin-layout-block" style="display: none; margin-top: 10px;">
+            <div style="background: #2c3e50; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+                <h2 style="color: white; margin: 0; font-size: 15px; text-align: left;">🔐 ADMIN CONTROL PANEL</h2>
+            </div>
+            
+            <div class="admin-nav">
+                <button id="tab-btn-core" class="active" onclick="switchAdminTab('core')">⚙️ Admin Section</button>
+                <button id="tab-btn-maker" onclick="switchAdminTab('maker')">📝 Maker Section</button>
+                <button id="tab-btn-checker" onclick="switchAdminTab('checker')">✅ Checker Section</button>
+            </div>
+
+            <div id="admin-core-section" class="admin-tab-content active">
+                <div class="main-layout" style="gap: 15px;">
+                    <div class="section-box" style="flex: 1.5; min-width: 320px; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px;">
+                            <h3 style="margin: 0; padding: 0; border: none;">Manage & Delete Shipment Entries</h3>
+                            <button class="btn-save" onclick="promptAdminDelete()" style="width: auto; margin: 0; padding: 4px 10px; font-size: 10px; height: 24px; background: linear-gradient(135deg, #ff7675 0%, #ee5253 100%);">🗑️ DELETE SELECTED</button>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 10px;">
+                            <div class="form-group" style="margin:0;"><label>AWB / LR No</label><input type="text" id="admin-filter-awb" placeholder="Search AWB" oninput="renderAdminShipmentsTable()"></div>
+                            <div class="form-group" style="margin:0;"><label>Ref No Filter</label><input type="text" id="admin-filter-ref" placeholder="REF NO" oninput="renderAdminShipmentsTable()"></div>
+                            <div class="form-group" style="margin:0;">
+                                <label>Cancel Date Range</label>
+                                <div class="date-range-container">
+                                    <input type="date" id="admin-filter-cancel-from" onchange="renderAdminShipmentsTable()">
+                                    <input type="date" id="admin-filter-cancel-to" onchange="renderAdminShipmentsTable()">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>RTO Date Range</label>
+                                <div class="date-range-container">
+                                    <input type="date" id="admin-filter-rto-from" onchange="renderAdminShipmentsTable()">
+                                    <input type="date" id="admin-filter-rto-to" onchange="renderAdminShipmentsTable()">
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label>Status</label>
+                                <select id="admin-filter-status" onchange="renderAdminShipmentsTable()">
+                                    <option value="">ALL</option>
+                                    <option value="CLOSED">CLOSED</option>
+                                    <option value="EXCESS">EXCESS</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="table-container" style="max-height: 250px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30px;"><input type="checkbox" id="admin-select-all" onclick="toggleAllAdminCheckboxes(this)"></th>
+                                        <th>REF NO</th>
+                                        <th>AWB</th>
+                                        <th>BLD NO</th>
+                                        <th>CANCEL DATE</th>
+                                        <th>RTO DATE</th>
+                                        <th>STATUS</th>
+                                        <th>ACTION</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-shipments-body"></tbody>
+                            </table>
+                        </div>
+                        
+                        <div id="admin-edit-form" style="display: none; background: #f1f2f6; padding: 10px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #ccd1d9; box-sizing: border-box;">
+                            <h4 style="margin: 0 0 8px 0; font-size: 11px; color: #2c3e50;">EDIT DETAILS FOR AWB: <span id="admin-edit-awb-title" style="color:#d63031; font-weight: bold;"></span></h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <div class="form-group"><label>BLD No</label><input type="text" id="admin-edit-bld"></div>
+                                <div class="form-group"><label>Manifest ID</label><input type="text" id="admin-edit-manifest"></div>
+                                <div class="form-group"><label>Cancel Date</label><input type="date" id="admin-edit-cancel"></div>
+                                <div class="form-group">
+                                    <label>Remarks</label>
+                                    <select id="admin-edit-remarks"></select>
+                                </div>
+                                <div class="form-group"><label>RTO/Re-Pickup Date</label><input type="date" id="admin-edit-rto"></div>
+                                <div class="form-group">
+                                    <label>Status</label>
+                                    <select id="admin-edit-status">
+                                        <option value="OPEN">OPEN</option>
+                                        <option value="CLOSED">CLOSED</option>
+                                        <option value="EXCESS">EXCESS</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 8px; margin-top: 10px;">
+                                <button class="btn-save" onclick="adminUpdateEntry()" style="background: linear-gradient(135deg, #1dd1a1 0%, #10ac84 100%); flex: 1; height: 28px; padding: 2px;">UPDATE ENTRY</button>
+                                <button class="btn-save" onclick="closeAdminEditForm()" style="background: linear-gradient(135deg, #a4b0be 0%, #747d8c 100%); flex: 1; height: 28px; padding: 2px;">CANCEL</button>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
+                        
+                        <!-- EMAIL CONFIGURATION -->
+                        <div class="section-box" style="background: #eaf2f8; border-color: #2980b9;">
+                            <h3 style="border-bottom: 2px solid #2980b9; padding-bottom: 4px; margin-bottom: 10px; color: #2980b9;">Email Configuration</h3>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label style="font-size: 10px; font-weight: bold;">TARGET EMAIL IDs (Comma Separated)</label>
+                                <input type="text" id="admin-target-emails" placeholder="admin@test.com, manager@test.com" style="height: 30px; font-size: 11px; text-transform: lowercase;">
+                                <button class="btn-primary" onclick="saveAdminEmails()" style="margin-top: 5px; height: 28px; font-size: 11px;">SAVE EMAILS</button>
+                            </div>
+                        </div>
+
+                        <!-- DYNAMIC COMBOBOX MANAGER -->
+                        <div class="section-box">
+                            <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px;">Dynamic Combobox Manager</h3>
+                            <div class="form-group">
+                                <label>Choose Combobox to Manage</label>
+                                <select id="admin-combobox-select" onchange="renderAdminDropdownManager()">
+                                    <option value="deviceErrors">Device's Error</option>
+                                    <option value="remarksOptions">Remarks Options</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                                <input type="text" id="admin-new-option-input" placeholder="ENTER NEW OPTION" style="flex: 1; height: 26px; font-size: 11px;">
+                                <button class="btn-save" onclick="addNewOption()" style="width: auto; padding: 0 12px; height: 26px; margin: 0; font-size: 11px;">ADD</button>
+                            </div>
+                            <div class="table-container" style="max-height: 120px;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Option Name</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-dropdown-options-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- USER CREDENTIALS & MANAGEMENT -->
+                        <div class="section-box">
+                            <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px;">User Credentials & Management</h3>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 6px; margin-bottom: 10px; align-items: end; background: #f8f9fa; padding: 6px; border-radius: 4px; border: 1px dashed #ccd1d9;">
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label style="font-size: 9px; font-weight: bold;">USERNAME</label>
+                                    <input type="text" id="admin-new-username" placeholder="NAME" style="height: 24px; font-size: 10px;">
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label style="font-size: 9px; font-weight: bold;">ROLE</label>
+                                    <select id="admin-new-role" style="height: 24px; font-size: 10px; padding: 2px 4px;">
+                                        <option value="MAKER">MAKER</option>
+                                        <option value="CHECKER">CHECKER</option>
+                                        <option value="ADMIN">ADMIN</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label style="font-size: 9px; font-weight: bold;">BLDG #</label>
+                                    <select id="admin-new-bldg" style="height: 24px; font-size: 10px; padding: 2px 4px;">
+                                        <option value="ALL">ALL</option>
+                                        <option value="Bldg#3">Bldg#3</option>
+                                        <option value="Bldg#5">Bldg#5</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label style="font-size: 9px; font-weight: bold;">PASSWORD</label>
+                                    <input type="text" id="admin-new-password" placeholder="PASS" style="height: 24px; font-size: 10px; text-transform: none;">
+                                </div>
+                                <button class="btn-save" onclick="adminAddNewUser()" style="width: auto; padding: 0 10px; height: 24px; margin: 0; font-size: 10px; background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%);">ADD</button>
+                            </div>
+
+                            <div class="table-container" style="max-height: 160px;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Username</th>
+                                            <th>Role</th>
+                                            <th>Bldg #</th>
+                                            <th>Password (Visible)</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-users-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-maker-section" class="admin-tab-content">
+                <div class="section-box">
+                    <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px;">MAKER DASHBOARD LOG</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1.8fr 1fr; gap: 5px; margin-bottom: 10px; background: #f8f9fa; padding: 6px; border-radius: 4px; border: 1px solid #ccd1d9;">
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">BLD Filter</label><input type="text" id="admin-maker-filter-bld" placeholder="BLD" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">AWB Filter</label><input type="text" id="admin-maker-filter-awb" placeholder="AWB" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">Ref No Filter</label><input type="text" id="admin-maker-filter-ref" placeholder="REF NO" oninput="updateDataTable()"></div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">RTO Date (FROM - TO)</label>
+                            <div class="date-range-container">
+                                <input type="date" id="admin-maker-filter-rto-from" onchange="updateDataTable()">
+                                <input type="date" id="admin-maker-filter-rto-to" onchange="updateDataTable()">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">Status Filter</label>
+                            <select id="admin-maker-filter-status" onchange="updateDataTable()">
+                                <option value="">ALL</option>
+                                <option value="CLOSED">CLOSED</option>
+                                <option value="EXCESS">EXCESS</option>
+                                <option value="RTO_RECEIVED">RTO RECEIVED</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>SL NO</th>
+                                    <th>REF NO</th>
+                                    <th>AWB</th>
+                                    <th>BLD NO</th>
+                                    <th>MANIFEST ID</th>
+                                    <th>CANCEL DATE</th>
+                                    <th>RTO DATE</th>
+                                    <th>STATUS</th>
+                                    <th>RECEIVING STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-maker-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="admin-checker-section" class="admin-tab-content">
+                <div class="section-box">
+                    <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px;">CHECKER DATA LOG (ALL CLOSED DATA)</h3>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1.8fr 1fr; gap: 5px; margin-bottom: 10px; background: #f8f9fa; padding: 6px; border-radius: 4px; border: 1px solid #ccd1d9;">
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">BLD Filter</label><input type="text" id="admin-checker-filter-bld" placeholder="BLD" oninput="updateCheckerTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">AWB Filter</label><input type="text" id="admin-checker-filter-awb" placeholder="AWB" oninput="updateCheckerTable()"></div>
+                        <div class="form-group" style="margin:0;"><label style="font-size: 9px;">Ref No Filter</label><input type="text" id="admin-checker-filter-ref" placeholder="REF NO" oninput="updateCheckerTable()"></div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">RTO Date (FROM - TO)</label>
+                            <div class="date-range-container">
+                                <input type="date" id="admin-checker-filter-rto-from" onchange="updateCheckerTable()">
+                                <input type="date" id="admin-checker-filter-rto-to" onchange="updateCheckerTable()">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size: 9px;">Status Filter</label>
+                            <select id="admin-checker-filter-status" onchange="updateCheckerTable()">
+                                <option value="">ALL</option>
+                                <option value="CLOSED">CLOSED</option>
+                                <option value="EXCESS">EXCESS</option>
+                                <option value="RTO_RECEIVED">RTO RECEIVED</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>SL NO</th>
+                                    <th>REF NO</th>
+                                    <th>BLD NO</th>
+                                    <th>AWB</th>
+                                    <th>Manifest id</th>
+                                    <th>CHANNEL</th>
+                                    <th>Transporter Name</th>
+                                    <th>Channel Order ID</th>
+                                    <th>Manifested Date</th>
+                                    <th>Cancel by LSP Date</th>
+                                    <th>Device's Error</th>
+                                    <th>REMARKS</th>
+                                    <th>RTO/Re-Pickup Date</th>
+                                    <th>Status</th>
+                                    <th>Ageing</th>
+                                    <th style="background-color: #27ae60;">RECEIVING STATUS</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-checker-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        // ==========================================
+        // UTILITIES & GLOBAL VARIABLES
+        // ==========================================
+        
+        function parseHtmlDate(htmlDate) {
+            if (!htmlDate) return null;
+            let p = htmlDate.split('-');
+            return new Date(p[0], parseInt(p[1]) - 1, p[2]).getTime();
+        }
+
+        function parseDbDate(dbDateStr) {
+            if (!dbDateStr || dbDateStr === '-') return null;
+            let p = dbDateStr.trim().split('-');
+            if (p.length !== 3) return null;
+            return new Date(p[2], parseInt(p[1]) - 1, p[0]).getTime();
+        }
+
+        function isDateInRange(dbDateStr, fromVal, toVal) {
+            if (!fromVal && !toVal) return true; 
+            let dbTime = parseDbDate(dbDateStr);
+            if (!dbTime) return false; 
+            
+            let fromTime = parseHtmlDate(fromVal) || -Infinity;
+            let toTime = parseHtmlDate(toVal) || Infinity;
+            
+            return dbTime >= fromTime && dbTime <= toTime;
+        }
+
+        function toHtmlDate(dbDateStr) {
+            if(!dbDateStr || dbDateStr === '-') return '';
+            let p = dbDateStr.split('-');
+            if(p.length !== 3) return '';
+            return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
+        }
+
+        function toDbDate(htmlDate) {
+            if(!htmlDate) return '-';
+            let p = htmlDate.split('-');
+            if(p.length !== 3) return '-';
+            return `${p[2]}-${p[1]}-${p[0]}`;
+        }
+
+        function parseDateDDMMYYYY(dateStr) {
+            if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '' || dateStr === '-') return null;
+            let parts = dateStr.trim().split('-');
+            if (parts.length !== 3) return null;
+            return new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
+        }
+
+        const safeInc = (val, filter) => {
+            if (!filter) return true;
+            if (!val || val === '-') return false;
+            return String(val).toUpperCase().includes(String(filter).toUpperCase());
+        };
+
+        function parseCSVRow(text, delimiter = ',') {
+            let result = [];
+            let col = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                let char = text[i];
+                if (char === '"' && text[i+1] === '"') {
+                    col += '"'; i++; 
+                } else if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === delimiter && !inQuotes) {
+                    result.push(col);
+                    col = '';
+                } else {
+                    col += char;
+                }
+            }
+            result.push(col);
+            return result;
+        }
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCL8LDJVImrhDRingxAPIjSztNC368lc04",
+            authDomain: "mahendra-sir.firebaseapp.com",
+            databaseURL: "https://mahendra-sir-default-rtdb.firebaseio.com",
+            projectId: "mahendra-sir",
+            storageBucket: "mahendra-sir.firebasestorage.app",
+            messagingSenderId: "551739354961",
+            appId: "1:551739354961:web:59b66962e641030a86ed70",
+            measurementId: "G-TKCBD9MY5Q"
+        };
+        
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.database();
+
+        let manifestDatabase = {}; 
+        let savedShipments = {}; 
+        let serialCounter = 1;
+        let globalRefCounter = 1; 
+        let adminEmails = "";
+
+        let loggedInRole = "MAKER"; 
+        let loggedInUser = "";
+        let isFirebaseLoaded = true; 
+        
+        let checkerActiveRef = ""; 
+
+        let deviceErrors = ["SCANNER ISSUE", "NETWORK ERROR", "BARCODE UNREADABLE"];
+        let remarksOptions = ["RTO", "RE-PICKUP"];
+
+        let usersDatabase = { "ADMIN": { role: "ADMIN", password: "123", sessionToken: "", bldg: "ALL" } };
+        window.pendingEmailData = null; 
+
+        function normalizeDateToDDMMYYYY(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            dateStr = dateStr.split(' ')[0]; 
+            if (dateStr.includes('-')) {
+                let parts = dateStr.split('-');
+                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`; 
+                return dateStr; 
+            }
+            if (dateStr.includes('/')) {
+                let parts = dateStr.split('/');
+                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                return `${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}-${parts[2]}`; 
+            }
+            return dateStr;
+        }
+
+        function enforceAdminUser() {
+            let dbChanged = false;
+            if (!usersDatabase || typeof usersDatabase !== 'object' || Array.isArray(usersDatabase)) {
+                usersDatabase = {}; dbChanged = true;
+            }
+            let oldUsers = ["JOHN", "SAM", "MAHENDRA"];
+            oldUsers.forEach(ou => {
+                if (usersDatabase[ou]) { delete usersDatabase[ou]; dbChanged = true; }
+            });
+            if (!usersDatabase["ADMIN"] || typeof usersDatabase["ADMIN"] !== 'object') {
+                usersDatabase["ADMIN"] = { role: "ADMIN", password: "123", sessionToken: "", bldg: "ALL" };
+                dbChanged = true;
+            }
+            return dbChanged;
+        }
+
+        function saveLocalOnly() {
+            try {
+                localStorage.setItem("lsp_manifestDatabase", JSON.stringify(manifestDatabase));
+                localStorage.setItem("lsp_savedShipments", JSON.stringify(savedShipments));
+                localStorage.setItem("lsp_usersDatabase", JSON.stringify(usersDatabase));
+                localStorage.setItem("lsp_serialCounter", serialCounter);
+                localStorage.setItem("lsp_globalRefCounter", globalRefCounter);
+                localStorage.setItem("lsp_adminEmails", adminEmails);
+                localStorage.setItem("lsp_deviceErrors", JSON.stringify(deviceErrors));
+                localStorage.setItem("lsp_remarksOptions", JSON.stringify(remarksOptions));
+            } catch (e) {
+                console.warn("Local storage limit reached.");
+            }
+        }
+
+        function syncSettingsToFirebase() {
+            enforceAdminUser();
+            saveLocalOnly();
+            if (!isFirebaseLoaded) return;
+            const clean = (obj) => JSON.parse(JSON.stringify(obj || {}));
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER/usersDatabase").set(clean(usersDatabase));
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER/adminEmails").set(adminEmails);
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER/deviceErrors").set(clean(deviceErrors));
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER/remarksOptions").set(clean(remarksOptions));
+        }
+
+        function syncMultipleShipments(updates) {
+            saveLocalOnly();
+            if (!isFirebaseLoaded) return;
+            updates["serialCounter"] = serialCounter;
+            updates["globalRefCounter"] = globalRefCounter;
+            let cleanUpdates = JSON.parse(JSON.stringify(updates));
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER").update(cleanUpdates).catch(e => alert("⚠️ Bulk Upload Failed: " + e.message));
+        }
+
+        function syncManifestToFirebase() {
+            saveLocalOnly();
+            if (!isFirebaseLoaded) return;
+            let cleanManifest = JSON.parse(JSON.stringify(manifestDatabase));
+            db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").set(cleanManifest)
+                .catch(e => alert("⚠️ Manifest Upload Failed: " + e.message));
+        }
+
+        function loadFromLocalStorage() {
+            try {
+                let storedManifest = localStorage.getItem("lsp_manifestDatabase");
+                if (storedManifest) manifestDatabase = JSON.parse(storedManifest);
+
+                let storedShipments = localStorage.getItem("lsp_savedShipments");
+                if (storedShipments) savedShipments = JSON.parse(storedShipments);
+
+                let storedUsers = localStorage.getItem("lsp_usersDatabase");
+                if (storedUsers) {
+                    let parsedUsers = JSON.parse(storedUsers);
+                    if(parsedUsers && typeof parsedUsers === 'object') {
+                        usersDatabase = parsedUsers;
+                    }
+                }
+
+                let storedCounter = localStorage.getItem("lsp_serialCounter");
+                if (storedCounter) serialCounter = parseInt(storedCounter);
+
+                let storedRefCounter = localStorage.getItem("lsp_globalRefCounter");
+                if (storedRefCounter) globalRefCounter = parseInt(storedRefCounter);
+
+                let storedEmails = localStorage.getItem("lsp_adminEmails");
+                if (storedEmails) adminEmails = storedEmails;
+
+                let storedErrors = localStorage.getItem("lsp_deviceErrors");
+                if (storedErrors) deviceErrors = JSON.parse(storedErrors);
+
+                let storedRemarks = localStorage.getItem("lsp_remarksOptions");
+                if (storedRemarks) remarksOptions = JSON.parse(storedRemarks);
+            } catch(e) {}
+            enforceAdminUser();
+            recalculateSerialNumbers();
+        }
+
+        window.switchAdminTab = function(tabName) {
+            document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.admin-nav button').forEach(el => el.classList.remove('active'));
+            document.getElementById('admin-' + tabName + '-section').classList.add('active');
+            document.getElementById('tab-btn-' + tabName).classList.add('active');
+            
+            if(tabName === 'core') {
+                document.getElementById('admin-target-emails').value = adminEmails;
+                renderAdminUsersTable();
+                renderAdminDropdownManager();
+            }
+        };
+
+        function updateManifestDbCount() {
+            let el = document.getElementById('manifest-db-count');
+            if(el) el.innerText = Object.keys(manifestDatabase).length;
+        }
+
+        window.clearManifestDatabase = function() {
+            if(confirm("ARE YOU SURE YOU WANT TO CLEAR THE MANIFEST DATABASE? \n\nNote: This will NOT affect your saved shipments or tracker data.")) {
+                manifestDatabase = {};
+                db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").remove();
+                saveLocalOnly();
+                updateManifestDbCount();
+                alert("MANIFEST DATABASE CLEARED SUCCESSFULLY!");
+            }
+        }
+
+        document.addEventListener('input', function(e) {
+            if (e.target.tagName === 'INPUT' && e.target.type === 'text' && !e.target.id.includes('password') && !e.target.id.includes('admin-pass') && !e.target.id.includes('email')) {
+                if (e.target.id.includes('awb')) {
+                    let start = e.target.selectionStart;
+                    let end = e.target.selectionEnd;
+                    let val = e.target.value.replace(/[\.\#\$\/\[\]]/g, '');
+                    if (val !== e.target.value) {
+                        e.target.value = val;
+                        e.target.setSelectionRange(start - 1, end - 1);
+                    }
+                }
+            }
+        });
+
+        function populateDropdowns() {
+            const adminRemSelect = document.getElementById('admin-edit-remarks');
+            if (adminRemSelect) {
+                adminRemSelect.innerHTML = '<option value="">SELECT REMARK</option>';
+                remarksOptions.forEach(rem => {
+                    adminRemSelect.innerHTML += `<option value="${rem}">${rem}</option>`;
+                });
+            }
+        }
+
+        function recalculateSerialNumbers() {
+            let keys = Object.keys(savedShipments).filter(awb => savedShipments[awb]);
+            if (keys.length === 0) { serialCounter = 1; return; }
+            keys.sort((a, b) => {
+                let slA = parseInt(savedShipments[a].slNo) || 999999;
+                let slB = parseInt(savedShipments[b].slNo) || 999999;
+                return slA - slB;
+            });
+            let newCounter = 1;
+            keys.forEach(awb => {
+                savedShipments[awb].slNo = newCounter;
+                newCounter++;
+            });
+            serialCounter = newCounter;
+        }
+
+        window.updateDataTable = function() {
+            try {
+                let tbody = document.getElementById('saved-data-body');
+                let adminMakerBody = document.getElementById('admin-maker-body');
+                
+                let dataArr = Object.keys(savedShipments).filter(k => savedShipments[k]).map(awb => { return { awb: awb, ...savedShipments[awb] }; });
+                dataArr.sort((a, b) => (parseInt(b.slNo) || 0) - (parseInt(a.slNo) || 0)); 
+
+                let htmlBuffer = "";
+                let adminHtmlBuffer = "";
+
+                let mkBld = document.getElementById('maker-filter-bld') ? document.getElementById('maker-filter-bld').value.trim() : '';
+                let mkAwb = document.getElementById('maker-filter-awb') ? document.getElementById('maker-filter-awb').value.trim() : '';
+                let mkRef = document.getElementById('maker-filter-ref') ? document.getElementById('maker-filter-ref').value.trim() : '';
+                
+                let mkRtoFrom = document.getElementById('maker-filter-rto-from') ? document.getElementById('maker-filter-rto-from').value : '';
+                let mkRtoTo = document.getElementById('maker-filter-rto-to') ? document.getElementById('maker-filter-rto-to').value : '';
+                
+                let mkStatus = document.getElementById('maker-filter-status') ? document.getElementById('maker-filter-status').value : '';
+
+                let amBld = document.getElementById('admin-maker-filter-bld') ? document.getElementById('admin-maker-filter-bld').value.trim() : '';
+                let amAwb = document.getElementById('admin-maker-filter-awb') ? document.getElementById('admin-maker-filter-awb').value.trim() : '';
+                let amRef = document.getElementById('admin-maker-filter-ref') ? document.getElementById('admin-maker-filter-ref').value.trim() : '';
+                
+                let amRtoFrom = document.getElementById('admin-maker-filter-rto-from') ? document.getElementById('admin-maker-filter-rto-from').value : '';
+                let amRtoTo = document.getElementById('admin-maker-filter-rto-to') ? document.getElementById('admin-maker-filter-rto-to').value : '';
+                
+                let amStatus = document.getElementById('admin-maker-filter-status') ? document.getElementById('admin-maker-filter-status').value : '';
+
+                dataArr.forEach(s => {
+                    let statusColor = (s.status === "CLOSED" || s.status === "EXCESS") ? "green" : "#d63031";
+                    let receivingStatusText = s.receivingStatus || "-";
+                    let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
+                    let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
+                    
+                    let rowHtml = `<tr>
+                        <td>${s.slNo || '-'}</td>
+                        <td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
+                        <td style="font-weight:bold;">${s.awb || '-'}</td>
+                        <td>${s.bldNo || '-'}</td>
+                        <td>${s.manifestId || '-'}</td>
+                        <td>${s.cancelDate || '-'}</td>
+                        <td>${s.rtoDate || '-'}</td>
+                        <td style="color:${statusColor}; font-weight:bold;">${s.status || 'CLOSED'}</td>
+                        <td style="${receivingStyle}">${receivingStatusText}</td>
+                    </tr>`;
+
+                    let mMatchBld = safeInc(s.bldNo, mkBld);
+                    let mMatchAwb = safeInc(s.awb, mkAwb);
+                    let mMatchRef = safeInc(s.refNumber, mkRef);
+                    let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
+                    let mMatchStatus = true;
+                    if (mkStatus === 'OPEN') mMatchStatus = (s.status === 'OPEN');
+                    else if (mkStatus === 'CLOSED') mMatchStatus = (s.status === 'CLOSED');
+                    else if (mkStatus === 'EXCESS') mMatchStatus = (s.status === 'EXCESS');
+                    else if (mkStatus === 'RTO_RECEIVED') mMatchStatus = isReceived;
+
+                    if (mMatchBld && mMatchAwb && mMatchRef && mMatchRto && mMatchStatus) htmlBuffer += rowHtml;
+
+                    let amMatchBld = safeInc(s.bldNo, amBld);
+                    let amMatchAwb = safeInc(s.awb, amAwb);
+                    let amMatchRef = safeInc(s.refNumber, amRef);
+                    let amMatchRto = isDateInRange(s.rtoDate, amRtoFrom, amRtoTo);
+                    let amMatchStatus = true;
+                    if (amStatus === 'OPEN') amMatchStatus = (s.status === 'OPEN');
+                    else if (amStatus === 'CLOSED') amMatchStatus = (s.status === 'CLOSED');
+                    else if (amStatus === 'EXCESS') amMatchStatus = (s.status === 'EXCESS');
+                    else if (amStatus === 'RTO_RECEIVED') amMatchStatus = isReceived;
+
+                    if (amMatchBld && amMatchAwb && amMatchRef && amMatchRto && amMatchStatus) adminHtmlBuffer += rowHtml;
+                });
+                
+                if (tbody) tbody.innerHTML = htmlBuffer;
+                if (adminMakerBody) adminMakerBody.innerHTML = adminHtmlBuffer;
+            } catch(e) { console.error("Error in updateDataTable:", e); }
+        };
+
+        // ==========================================
+        // CHECKER DASHBOARD & SCANNING LOGIC
+        // ==========================================
+        window.loadCheckerReference = function() {
+            let refInput = document.getElementById('checker-ref-input').value.trim().toUpperCase();
+            if(refInput === "") {
+                checkerActiveRef = "";
+                document.getElementById('checker-awb-input').disabled = true;
+                resetCheckerStats();
+                updateCheckerTable();
+                return;
+            }
+            
+            checkerActiveRef = refInput;
+            document.getElementById('checker-awb-input').disabled = false;
+            document.getElementById('checker-awb-input').focus();
+            
+            refreshCheckerStats();
+            updateCheckerTable();
+        };
+
+        function refreshCheckerStats() {
+            if(!checkerActiveRef) return;
+            
+            let total = [], scanned = [], pending = [], excess = [];
+
+            Object.keys(savedShipments).forEach(awb => {
+                let s = savedShipments[awb];
+                if(s.refNumber === checkerActiveRef) {
+                    if(s.status === "EXCESS") {
+                        excess.push(awb);
+                    } else {
+                        total.push(awb);
+                        if(s.receivingStatus && s.receivingStatus.includes("RECEIVED")) {
+                            scanned.push(awb);
+                        } else {
+                            pending.push(awb);
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('chk-total').innerText = total.length;
+            document.getElementById('chk-scanned').innerText = scanned.length;
+            document.getElementById('chk-pending').innerText = pending.length;
+            document.getElementById('chk-excess').innerText = excess.length;
+
+            document.getElementById('chk-pending-list').innerHTML = pending.length > 0 ? pending.join("\n") : "NO PENDING";
+            document.getElementById('chk-excess-list').innerHTML = excess.length > 0 ? excess.join("\n") : "NO EXCESS";
+        }
+
+        function resetCheckerStats() {
+            document.getElementById('chk-total').innerText = "0";
+            document.getElementById('chk-scanned').innerText = "0";
+            document.getElementById('chk-pending').innerText = "0";
+            document.getElementById('chk-excess').innerText = "0";
+            document.getElementById('chk-pending-list').innerHTML = "";
+            document.getElementById('chk-excess-list').innerHTML = "";
+        }
+
+        window.processCheckerScan = function() {
+            if(!checkerActiveRef) {
+                alert("PLEASE ENTER & LOAD A REFERENCE NUMBER FIRST!");
+                return;
+            }
+            
+            let scanInput = document.getElementById('checker-awb-input');
+            let scanAwb = scanInput.value.trim().toUpperCase().replace(/[\.\#\$\/\[\]]/g, '');
+            if (scanAwb === "") return;
+
+            let sessionBldg = sessionStorage.getItem("savedBldg");
+            let today = new Date();
+            let dd = String(today.getDate()).padStart(2, '0');
+            let mm = String(today.getMonth() + 1).padStart(2, '0');
+            let yyyy = today.getFullYear();
+            let formattedToday = `${dd}-${mm}-${yyyy}`;
+
+            let existsInRef = savedShipments[scanAwb] && savedShipments[scanAwb].refNumber === checkerActiveRef;
+
+            if (!existsInRef) {
+                let isDuplicateExcess = savedShipments[scanAwb] && savedShipments[scanAwb].refNumber === checkerActiveRef && savedShipments[scanAwb].status === "EXCESS";
+                if(isDuplicateExcess) {
+                    alert(`DUPLICATE SCAN! AWB ${scanAwb} is already in Excess for this Reference.`);
+                    scanInput.value = ""; return;
+                }
+
+                let row = manifestDatabase[scanAwb] || {};
+
+                savedShipments[scanAwb] = {
+                    slNo: serialCounter++,
+                    refNumber: checkerActiveRef,
+                    bldNo: row.bld || sessionBldg || '-',
+                    manifestId: row.manifest || '-',
+                    channel: row.channel || '-',
+                    transporter: row.transporter || '-',
+                    channelOrder: row.order || '-',
+                    manifestDate: row.date || '-',
+                    errSel: "-",
+                    errTxt: "EXCESS ENTRY",
+                    cancelDate: formattedToday,
+                    remarks: "EXCESS",
+                    rtoDate: formattedToday,
+                    status: "EXCESS",
+                    ageing: "0",
+                    isModified: true,
+                    receivingStatus: "EXCESS RECEIVED"
+                };
+
+                alert(`EXCESS RECEIVED!\nAWB: ${scanAwb}\nThis shipment does not belong to the loaded Reference Number.`);
+                
+                let updates = {};
+                updates["savedShipments/" + scanAwb] = savedShipments[scanAwb];
+                syncMultipleShipments(updates);
+
+                refreshCheckerStats();
+                updateCheckerTable();
+                scanInput.value = "";
+                scanInput.focus();
+                return;
+            }
+
+            let s = savedShipments[scanAwb];
+            let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
+            
+            if (isReceived) {
+                alert(`ERROR: DUPLICATE SCAN! AWB ${scanAwb} HAS ALREADY BEEN RECEIVED.`);
+                scanInput.value = "";
+                scanInput.focus();
+                return;
+            }
+
+            let recStatus = s.remarks ? (s.remarks + " RECEIVED") : "RECEIVED";
+            savedShipments[scanAwb].receivingStatus = recStatus;
+            
+            let updates = {};
+            updates["savedShipments/" + scanAwb] = savedShipments[scanAwb];
+            syncMultipleShipments(updates);
+            
+            refreshCheckerStats();
+            updateCheckerTable();
+            scanInput.value = "";
+            scanInput.focus(); 
+        };
+
+        window.updateCheckerTable = function() {
+            try {
+                let tbody = document.getElementById('checker-data-body'); 
+                let adminCheckerBody = document.getElementById('admin-checker-body'); 
+                
+                let acBld = document.getElementById('admin-checker-filter-bld') ? document.getElementById('admin-checker-filter-bld').value.trim() : '';
+                let acAwb = document.getElementById('admin-checker-filter-awb') ? document.getElementById('admin-checker-filter-awb').value.trim() : '';
+                let acRef = document.getElementById('admin-checker-filter-ref') ? document.getElementById('admin-checker-filter-ref').value.trim() : '';
+                
+                let acRtoFrom = document.getElementById('admin-checker-filter-rto-from') ? document.getElementById('admin-checker-filter-rto-from').value : '';
+                let acRtoTo = document.getElementById('admin-checker-filter-rto-to') ? document.getElementById('admin-checker-filter-rto-to').value : '';
+                
+                let acStatus = document.getElementById('admin-checker-filter-status') ? document.getElementById('admin-checker-filter-status').value : '';
+
+                let dataArr = Object.keys(savedShipments).filter(k => savedShipments[k]).map(awb => { return { awb: awb, ...savedShipments[awb] }; });
+                dataArr.sort((a, b) => (parseInt(b.slNo) || 0) - (parseInt(a.slNo) || 0));
+
+                let checkerHtmlBuffer = "";
+                let adminCheckerHtmlBuffer = "";
+
+                dataArr.forEach(s => {
+                    let statusColor = (s.status === "CLOSED" || s.status === "EXCESS") ? "green" : "#d63031";
+                    let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
+                    let receivingStatusText = s.receivingStatus || "-";
+                    let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
+
+                    let rowHTML = `<tr>
+                        <td>${s.slNo || '-'}</td>
+                        <td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
+                        <td>${s.bldNo || '-'}</td>
+                        <td style="font-weight:bold;">${s.awb || '-'}</td>
+                        <td>${s.manifestId || '-'}</td>
+                        <td>${s.channel || '-'}</td>
+                        <td>${s.transporter || '-'}</td>
+                        <td>${s.channelOrder || '-'}</td>
+                        <td>${s.manifestDate || '-'}</td>
+                        <td>${s.cancelDate || '-'}</td>
+                        <td>${s.errSel || s.errTxt || '-'}</td>
+                        <td>${s.remarks || '-'}</td>
+                        <td>${s.rtoDate || '-'}</td>
+                        <td style="color:${statusColor}; font-weight:bold;">${s.status || 'CLOSED'}</td>
+                        <td>${s.ageing || '-'}</td>
+                        <td style="${receivingStyle}">${receivingStatusText}</td>
+                    </tr>`;
+
+                    if (checkerActiveRef && s.refNumber === checkerActiveRef) {
+                        checkerHtmlBuffer += rowHTML;
+                    }
+
+                    if (s.status === "CLOSED" || s.status === "EXCESS" || s.isModified) {
+                        let acMatchBld = safeInc(s.bldNo, acBld);
+                        let acMatchAwb = safeInc(s.awb, acAwb);
+                        let acMatchRef = safeInc(s.refNumber, acRef);
+                        let acMatchRto = isDateInRange(s.rtoDate, acRtoFrom, acRtoTo);
+                        
+                        let acMatchStatus = true;
+                        if (acStatus === 'OPEN') acMatchStatus = (s.status === 'OPEN');
+                        else if (acStatus === 'CLOSED') acMatchStatus = (s.status === 'CLOSED');
+                        else if (acStatus === 'EXCESS') acMatchStatus = (s.status === 'EXCESS');
+                        else if (acStatus === 'RTO_RECEIVED') acMatchStatus = isReceived;
+
+                        if (acMatchBld && acMatchAwb && acMatchRef && acMatchRto && acMatchStatus) {
+                            adminCheckerHtmlBuffer += rowHTML;
+                        }
+                    }
+                });
+                
+                if (tbody) tbody.innerHTML = checkerHtmlBuffer;
+                if (adminCheckerBody) adminCheckerBody.innerHTML = adminCheckerHtmlBuffer;
+
+            } catch(e) { console.error("Error in updateCheckerTable:", e); }
+        };
+
+        let chkInput = document.getElementById('checker-awb-input');
+        if (chkInput) {
+            chkInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') processCheckerScan();
+            });
+        }
+
+        window.saveAdminEmails = function() {
+            let emailInput = document.getElementById('admin-target-emails').value.trim();
+            adminEmails = emailInput;
+            syncSettingsToFirebase();
+            alert("Admin Target Emails saved successfully!");
+        };
+
+        // ==========================================
+        // REPORT MODAL LOGIC
+        // ==========================================
+        window.openReportModal = function() {
+            let today = new Date();
+            let dd = String(today.getDate()).padStart(2, '0');
+            let mm = String(today.getMonth() + 1).padStart(2, '0');
+            let yyyy = today.getFullYear();
+            let ymd = `${yyyy}-${mm}-${dd}`;
+            document.getElementById('report-date-from').value = ymd;
+            document.getElementById('report-date-to').value = ymd;
+            generateReport();
+            document.getElementById('report-modal').style.display = 'flex';
+        };
+
+        window.closeReportModal = function() {
+            document.getElementById('report-modal').style.display = 'none';
+        };
+
+        window.generateReport = function() {
+            let fromVal = document.getElementById('report-date-from').value;
+            let toVal = document.getElementById('report-date-to').value;
+            let tbody = document.getElementById('report-modal-body');
+            let grouped = {};
+            
+            Object.keys(savedShipments).forEach(awb => {
+                let s = savedShipments[awb];
+                let dateToUse = s.uploadDate || s.cancelDate || '-';
+                if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
+                if (!s.refNumber || s.refNumber === '-') return; 
+
+                let key = dateToUse + "|||" + s.refNumber;
+                if(!grouped[key]) grouped[key] = [];
+                grouped[key].push(awb);
+            });
+
+            let html = "";
+            let keys = Object.keys(grouped);
+            
+            if(keys.length === 0) {
+                html = `<tr><td colspan="4" style="text-align:center; padding: 20px;">No references generated in this date range.</td></tr>`;
+            } else {
+                keys.forEach(k => {
+                    let parts = k.split("|||");
+                    let dateStr = parts[0];
+                    let refStr = parts[1];
+                    let awbs = grouped[k];
+                    
+                    html += `<tr>
+                        <td style="font-weight:bold;">${dateStr}</td>
+                        <td style="font-weight:bold; color:#8e44ad;">${refStr}</td>
+                        <td style="font-weight:bold; font-size:12px;">${awbs.length}</td>
+                        <td style="text-align:left; word-break: break-all; white-space: normal;">${awbs.join(", ")}</td>
+                    </tr>`;
+                });
+            }
+            tbody.innerHTML = html;
+        };
+
+        function getFilteredDataForExport(roleView) {
+            let dataArr = Object.keys(savedShipments).map(awb => ({ awb, ...savedShipments[awb] }));
+            dataArr.sort((a, b) => (parseInt(b.slNo) || 0) - (parseInt(a.slNo) || 0));
+
+            if (roleView === 'checker') {
+                if(!checkerActiveRef) return [];
+                return dataArr.filter(s => s.refNumber === checkerActiveRef);
+            }
+
+            if (roleView === 'maker') {
+                let mkBld = document.getElementById('maker-filter-bld') ? document.getElementById('maker-filter-bld').value.trim() : '';
+                let mkAwb = document.getElementById('maker-filter-awb') ? document.getElementById('maker-filter-awb').value.trim() : '';
+                let mkRef = document.getElementById('maker-filter-ref') ? document.getElementById('maker-filter-ref').value.trim() : '';
+                
+                let mkRtoFrom = document.getElementById('maker-filter-rto-from') ? document.getElementById('maker-filter-rto-from').value : '';
+                let mkRtoTo = document.getElementById('maker-filter-rto-to') ? document.getElementById('maker-filter-rto-to').value : '';
+                
+                let mkStatus = document.getElementById('maker-filter-status') ? document.getElementById('maker-filter-status').value : '';
+
+                return dataArr.filter(s => {
+                    let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
+                    let mMatchBld = safeInc(s.bldNo, mkBld);
+                    let mMatchAwb = safeInc(s.awb, mkAwb);
+                    let mMatchRef = safeInc(s.refNumber, mkRef);
+                    let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
+                    let mMatchStatus = true;
+                    
+                    if (mkStatus === 'OPEN') mMatchStatus = (s.status === 'OPEN');
+                    else if (mkStatus === 'CLOSED') mMatchStatus = (s.status === 'CLOSED');
+                    else if (mkStatus === 'EXCESS') mMatchStatus = (s.status === 'EXCESS');
+                    else if (mkStatus === 'RTO_RECEIVED') mMatchStatus = isReceived;
+
+                    return mMatchBld && mMatchAwb && mMatchRef && mMatchRto && mMatchStatus;
+                });
+            }
+
+            return dataArr;
+        }
+
+        window.getExportCSV = function(roleView) {
+            let headers = ["SL NO", "REF NO", "BLD NO", "AWB", "Manifest id", "CHANNEL", "Transporter Name", "Channel Order ID", "Manifested Date", "Cancel by LSP Date", "Device's Error", "REMARKS", "RTO/Re-Pickup Date", "Status", "Ageing", "RECEIVING STATUS"];
+            let csvRows = [headers.join(",")];
+            let data = getFilteredDataForExport(roleView);
+
+            data.forEach(s => {
+                let err = (s.errSel || s.errTxt || '').replace(/"/g, '""'); 
+                let remarks = (s.remarks || '').replace(/"/g, '""');
+                let receivingStatus = (s.receivingStatus || '-').replace(/"/g, '""');
+
+                let row = [
+                    s.slNo || '-', s.refNumber || '-', s.bldNo || '-', s.awb || '-', s.manifestId || '-', s.channel || '-',
+                    s.transporter || '-', s.channelOrder || '-', s.manifestDate || '-', s.cancelDate || '-',
+                    err || '-', remarks || '-', s.rtoDate || '-', s.status || '-', s.ageing || '-', receivingStatus
+                ];
+                csvRows.push(row.map(val => `"${val}"`).join(","));
+            });
+
+            return csvRows.join("\n");
+        };
+
+        window.getExportHTML = function(roleView) {
+            let html = `<table border="1" style="border-collapse: collapse; text-align: center; font-family: Arial, sans-serif; font-size: 11px;">
+                <thead>
+                    <tr style="background-color: #2c3e50; color: white;">
+                        <th>SL NO</th><th>REF NO</th><th>BLD NO</th><th>AWB</th><th>Manifest id</th>
+                        <th>CHANNEL</th><th>Transporter Name</th><th>Channel Order ID</th>
+                        <th>Manifested Date</th><th>Cancel by LSP Date</th><th>Device's Error</th>
+                        <th>REMARKS</th><th>RTO/Re-Pickup Date</th><th>Status</th>
+                        <th>Ageing</th><th style="background-color: #27ae60;">RECEIVING STATUS</th>
+                    </tr>
+                </thead><tbody>`;
+            
+            let data = getFilteredDataForExport(roleView);
+            data.forEach(s => {
+                let statusColor = (s.status === "CLOSED" || s.status === "EXCESS") ? "green" : "#d63031";
+                let recColor = (s.receivingStatus && String(s.receivingStatus).includes("RECEIVED")) ? "green" : "#000";
+                html += `<tr>
+                    <td>${s.slNo || '-'}</td><td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
+                    <td>${s.bldNo || '-'}</td><td style="font-weight:bold;">${s.awb}</td>
+                    <td>${s.manifestId || '-'}</td><td>${s.channel || '-'}</td><td>${s.transporter || '-'}</td>
+                    <td>${s.channelOrder || '-'}</td><td>${s.manifestDate || '-'}</td><td>${s.cancelDate || '-'}</td>
+                    <td>${s.errSel || s.errTxt || '-'}</td><td>${s.remarks || '-'}</td><td>${s.rtoDate || '-'}</td>
+                    <td style="color:${statusColor}; font-weight:bold;">${s.status}</td><td>${s.ageing || '-'}</td>
+                    <td style="color:${recColor}; font-weight:bold;">${s.receivingStatus || '-'}</td>
+                </tr>`;
+            });
+            html += `</tbody></table>`;
+            return html;
+        };
+
+        window.copyToExcel = function(roleView) {
+            let html = getExportHTML(roleView);
+            let tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            tempDiv.style.position = 'absolute';
+            tempDiv.style.left = '-9999px';
+            document.body.appendChild(tempDiv);
+            let range = document.createRange();
+            range.selectNode(tempDiv);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            try { document.execCommand('copy'); alert('✅ Detailed Data copied successfully!'); } catch (err) { alert('⚠️ Failed to copy data.'); }
+            window.getSelection().removeAllRanges();
+            document.body.removeChild(tempDiv);
+        };
+
+        window.downloadToCSV = function(roleView) {
+            let csvStr = getExportCSV(roleView);
+            let blob = new Blob(["\uFEFF" + csvStr], { type: 'text/csv;charset=utf-8;' });
+            let url = URL.createObjectURL(blob);
+            let a = document.createElement("a");
+            a.href = url;
+            a.download = roleView === 'checker' ? 'Checker_Filtered_Log.csv' : 'Maker_Detailed_Log.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
+        window.downloadUnifiedBulkTemplate = function() {
+            let csvContent = "data:text/csv;charset=utf-8,AWB NUMBER,DEVICE ERROR,CANCEL DATE (DD-MM-YYYY),REMARKS,RTO DATE (DD-MM-YYYY)\n";
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "Unified_Bulk_Entry_Template.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        window.processUnifiedBulkUpload = function(btnElement) {
+            let fileInput = document.getElementById('unified-bulk-csv-upload');
+            let file = fileInput.files[0];
+            if (!file) {
+                alert("PLEASE SELECT A CSV FILE FIRST!");
+                return;
+            }
+
+            let btnUpload = btnElement;
+            let ogText = btnUpload.innerText;
+            btnUpload.innerText = "⏳ UPLOADING...";
+            btnUpload.disabled = true;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                setTimeout(() => {
+                    try {
+                        let lines = e.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
+                        if(lines.length <= 1) {
+                            alert("CSV IS EMPTY OR HAS NO DATA ROWS!");
+                            fileInput.value = '';
+                            btnUpload.innerText = ogText;
+                            btnUpload.disabled = false;
+                            return;
+                        }
+
+                        let successCount = 0;
+                        let errorMsgs = [];
+                        let updates = {};
+                        let uploadedAWBs = [];
+
+                        recalculateSerialNumbers(); 
+                        let sessionBldg = sessionStorage.getItem("savedBldg");
+
+                        let todayDate = new Date();
+                        let dd = String(todayDate.getDate()).padStart(2, '0');
+                        let mm = String(todayDate.getMonth() + 1).padStart(2, '0');
+                        let currentYear = todayDate.getFullYear();
+                        let formattedToday = `${dd}-${mm}-${currentYear}`;
+
+                        let hasSuccess = false;
+                        let tentativeNewRefNumber = `RTO/${currentYear}/${String(globalRefCounter + 1).padStart(6, '0')}`;
+
+                        for (let i = 1; i < lines.length; i++) {
+                            let cols = parseCSVRow(lines[i]).map(c => c.trim().toUpperCase());
+                            let rawAwb = cols[0];
+                            let bulkAwb = rawAwb ? rawAwb.replace(/[\.\#\$\/\[\]]/g, '').trim() : "";
+                            let bulkErr = cols[1];
+                            let bulkCancelDate = cols[2];
+                            let bulkRem = cols[3];
+                            let bulkRto = cols[4];
+
+                            if(!bulkAwb) continue;
+
+                            let isStage1 = (bulkErr || bulkCancelDate);
+                            let isStage2 = (bulkRem || bulkRto);
+
+                            if(!isStage1 && !isStage2) {
+                                errorMsgs.push(`AWB ${bulkAwb}: No valid data provided.`);
+                                continue;
+                            }
+
+                            let row = manifestDatabase[bulkAwb] || { bld: '-', manifest: '-', channel: '-', transporter: '-', order: '-', date: '-' };
+
+                            let existing = savedShipments[bulkAwb];
+
+                            let cancelDateObj = parseDateDDMMYYYY(bulkCancelDate || (existing ? existing.cancelDate : ""));
+                            let rtoDateObj = parseDateDDMMYYYY(bulkRto);
+                            let calcAgeing = "";
+
+                            if (cancelDateObj && rtoDateObj && !isNaN(cancelDateObj.getTime()) && !isNaN(rtoDateObj.getTime())) {
+                                if (cancelDateObj <= rtoDateObj) {
+                                    calcAgeing = Math.ceil((rtoDateObj.getTime() - cancelDateObj.getTime()) / (1000 * 3600 * 24));
+                                }
+                            }
+
+                            if (!existing) {
+                                savedShipments[bulkAwb] = {
+                                    slNo: serialCounter++,
+                                    refNumber: tentativeNewRefNumber,
+                                    bldNo: row.bld,
+                                    manifestId: row.manifest,
+                                    channel: row.channel,
+                                    transporter: row.transporter,
+                                    channelOrder: row.order,
+                                    manifestDate: row.date,
+                                    errSel: "", 
+                                    errTxt: bulkErr || "-", 
+                                    cancelDate: bulkCancelDate || "-",
+                                    remarks: bulkRem || "-",
+                                    rtoDate: bulkRto || "-",
+                                    isModified: true,
+                                    status: "CLOSED", 
+                                    ageing: calcAgeing,
+                                    receivingStatus: "-",
+                                    uploadDate: formattedToday
+                                };
+                                updates["savedShipments/" + bulkAwb] = savedShipments[bulkAwb];
+                                uploadedAWBs.push(bulkAwb);
+                                successCount++;
+                                hasSuccess = true;
+
+                            } else {
+                                if (existing.isModified === true && loggedInRole !== "ADMIN") {
+                                    errorMsgs.push(`AWB ${bulkAwb}: Already modified.`); continue;
+                                }
+
+                                if(bulkErr) existing.errTxt = bulkErr;
+                                if(bulkCancelDate) existing.cancelDate = bulkCancelDate;
+                                
+                                existing.bldNo = existing.bldNo !== '-' ? existing.bldNo : row.bld;
+                                existing.manifestId = existing.manifestId !== '-' ? existing.manifestId : row.manifest;
+                                existing.channel = existing.channel !== '-' ? existing.channel : row.channel;
+                                existing.transporter = existing.transporter !== '-' ? existing.transporter : row.transporter;
+                                existing.channelOrder = existing.channelOrder !== '-' ? existing.channelOrder : row.order;
+                                existing.manifestDate = existing.manifestDate !== '-' ? existing.manifestDate : row.date;
+
+                                existing.refNumber = tentativeNewRefNumber; 
+                                existing.remarks = bulkRem || existing.remarks || "-";
+                                existing.rtoDate = bulkRto || existing.rtoDate || "-";
+                                existing.ageing = calcAgeing;
+                                existing.isModified = true;
+                                existing.status = "CLOSED";
+                                existing.uploadDate = formattedToday;
+
+                                updates["savedShipments/" + bulkAwb] = existing;
+                                uploadedAWBs.push(bulkAwb);
+                                successCount++;
+                                hasSuccess = true;
+                            }
+                        }
+
+                        if(hasSuccess) {
+                            globalRefCounter++;
+                        }
+
+                        recalculateSerialNumbers(); 
+                        syncMultipleShipments(updates);
+                        
+                        updateDataTable();
+                        fileInput.value = '';
+                        
+                        let msgDetails = `Successfully Processed: ${successCount} Shipment(s).`;
+                        if(errorMsgs.length > 0) {
+                            msgDetails += `\n\nErrors (${errorMsgs.length}):\n- ` + errorMsgs.slice(0, 5).join('\n- ');
+                            if(errorMsgs.length > 5) msgDetails += `\n...and ${errorMsgs.length - 5} more errors.`;
+                        }
+
+                        if(hasSuccess) {
+                            document.getElementById('success-ref-number').innerText = tentativeNewRefNumber;
+                            document.getElementById('success-msg-details').innerText = msgDetails;
+                            document.getElementById('upload-success-modal').style.display = 'flex';
+
+                            window.pendingEmailData = {
+                                ref: tentativeNewRefNumber,
+                                date: formattedToday,
+                                count: successCount,
+                                awbs: uploadedAWBs
+                            };
+                        } else {
+                            alert("NO DATA WAS PROCESSED.\n\n" + msgDetails);
+                        }
+
+                    } catch (error) {
+                        alert("Error processing file: " + error.message);
+                    } finally {
+                        btnUpload.innerText = ogText;
+                        btnUpload.disabled = false;
+                    }
+                }, 50);
+            };
+            reader.readAsText(file);
+        };
+
+        window.triggerEmailAndClose = function() {
+            document.getElementById('upload-success-modal').style.display = 'none';
+
+            let data = window.pendingEmailData;
+            if (data && data.count > 0) {
+                let subject = `Shipment Upload Report - Ref: ${data.ref}`;
+                let body = `Date: ${data.date}\r\nReference Number: ${data.ref}\r\nTotal Quantity: ${data.count}\r\nTracking IDs (AWBs):\r\n` + data.awbs.join("\r\n");
+
+                if (adminEmails && adminEmails.trim() !== "") {
+                    let mailtoLink = `mailto:${adminEmails}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    window.location.href = mailtoLink;
+                } else {
+                    alert("Data Saved! Note: No Admin Email is configured, so email could not be sent.");
+                }
+            }
+            window.pendingEmailData = null;
+        };
+
+        window.processManifestUpload = function(btnElement) {
+            let fileInput = document.getElementById('csv-upload');
+            let file = fileInput.files[0];
+            if (!file) {
+                alert("PLEASE SELECT A CSV FILE FIRST!");
+                return;
+            }
+            
+            let btn = btnElement; 
+            if(!btn || !btn.innerText) btn = document.querySelector('button[onclick*="processManifestUpload"]');
+            
+            let ogText = btn ? btn.innerText : "UPLOAD";
+            if (btn) {
+                btn.innerText = "⏳ UPLOADING...";
+                btn.disabled = true;
+            }
+            
+            let reader = new FileReader();
+            reader.onload = function(event) {
+                setTimeout(() => {
+                    try {
+                        let lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
+                        
+                        let headersFound = false;
+                        let headerRowIndex = -1;
+
+                        mappings = { awb: -1, bld: -1, manifest: -1, channel: -1, order: -1, transporter: -1, date: -1 };
+                        let delim = (lines[0] && (lines[0].includes('\t') || lines[0].includes(';'))) ? (lines[0].includes('\t') ? '\t' : ';') : ',';
+
+                        for (let rIdx = 0; rIdx < Math.min(30, lines.length); rIdx++) {
+                            let cols = parseCSVRow(lines[rIdx], delim).map(c => c.trim().toLowerCase());
+                            
+                            if (cols.some(c => c.includes('awb') || c.includes('waybill') || c.includes('tracking'))) {
+                                headersFound = true;
+                                headerRowIndex = rIdx;
+                                
+                                cols.forEach((col, cIdx) => {
+                                    let cleanCol = col.trim();
+                                    if (cleanCol === 'awb number' || cleanCol === 'awb' || cleanCol === 'tracking number' || cleanCol === 'waybill') mappings.awb = cIdx;
+                                    else if (cleanCol === 'fulfillment location name' || cleanCol === 'bld no' || cleanCol === 'facility') mappings.bld = cIdx;
+                                    else if (cleanCol === 'manifest id' || cleanCol === 'manifest_id') mappings.manifest = cIdx; 
+                                    else if (cleanCol === 'channel order id' || cleanCol === 'order id' || cleanCol === 'order_id') mappings.order = cIdx;
+                                    else if (cleanCol === 'sales channel' || cleanCol === 'channel' || cleanCol === 'channel name') mappings.channel = cIdx;
+                                    else if (cleanCol.includes('transporter') || cleanCol.includes('courier') || cleanCol.includes('lsp')) mappings.transporter = cIdx;
+                                    else if (cleanCol.includes('date') || cleanCol.includes('time') || cleanCol.includes('created')) mappings.date = cIdx;
+                                });
+                                break; 
+                            }
+                        }
+
+                        if (!headersFound || mappings.awb === -1) {
+                            alert("UPLOAD FAILED! Could not find 'AWB' column header in the first 30 rows.");
+                            return;
+                        }
+
+                        let newCount = 0;
+                        let startIndex = headerRowIndex + 1;
+                        let updates = {};
+
+                        for(let i = startIndex; i < lines.length; i++) {
+                            let rowVals = parseCSVRow(lines[i], delim);
+                            let getVal = (idx) => { return (idx >= 0 && idx < rowVals.length && rowVals[idx]) ? String(rowVals[idx]).trim().toUpperCase() : '-'; };
+
+                            let rawAwb = getVal(mappings.awb);
+                            let rowAwb = rawAwb.replace(/[\.\#\$\/\[\]]/g, '').trim(); 
+
+                            if(rowAwb !== '-' && rowAwb !== '' && !rowAwb.includes('AWB') && !rowAwb.includes('NUMBER')) {
+                                manifestDatabase[rowAwb] = {
+                                    bld: getVal(mappings.bld),
+                                    manifest: getVal(mappings.manifest),
+                                    channel: getVal(mappings.channel),
+                                    transporter: getVal(mappings.transporter),
+                                    order: getVal(mappings.order),
+                                    date: normalizeDateToDDMMYYYY(getVal(mappings.date))
+                                };
+                                updates[rowAwb] = manifestDatabase[rowAwb];
+                                newCount++;
+                            }
+                        }
+                        
+                        db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").update(updates);
+                        saveLocalOnly(); 
+                        
+                        document.getElementById('manifest-db-count').innerText = Object.keys(manifestDatabase).length;
+                        
+                        if (newCount > 0) {
+                            alert("UPLOAD COMPLETED! " + newCount + " RECORDS ADDED TO DATABASE.");
+                        } else {
+                            alert("WARNING: 0 Records added. Please ensure the CSV contains data.");
+                        }
+                        
+                        fileInput.value = ''; 
+                    } catch (error) {
+                        console.error("CSV Parse Error: ", error);
+                        alert("UPLOAD FAILED! ERROR: " + error.message);
+                    } finally {
+                        if (btn) {
+                            btn.innerText = ogText;
+                            btn.disabled = false;
+                        }
+                    }
+                }, 50);
+            };
+            reader.readAsText(file);
+        };
+
+        window.toggleAllAdminCheckboxes = function(source) {
+            let checkboxes = document.querySelectorAll('.admin-del-check');
+            checkboxes.forEach(cb => {
+                cb.checked = source.checked;
+            });
+        };
+
+        window.promptAdminDelete = function() {
+            let checkboxes = document.querySelectorAll('.admin-del-check:checked');
+            if (checkboxes.length === 0) {
+                alert("PLEASE SELECT AT LEAST ONE ENTRY TO DELETE!");
+                return;
+            }
+            document.getElementById('custom-confirm-modal').style.display = 'flex';
+        };
+
+        window.closeConfirmModal = function() {
+            document.getElementById('custom-confirm-modal').style.display = 'none';
+        };
+
+        window.executeBulkDelete = function() {
+            let checkboxes = document.querySelectorAll('.admin-del-check:checked');
+            let updates = {};
+            let count = 0;
+            checkboxes.forEach(cb => {
+                let awb = cb.value;
+                if(savedShipments[awb]) {
+                    delete savedShipments[awb];
+                    updates["savedShipments/" + awb] = null; 
+                    count++;
+                }
+            });
+
+            if(count === 0) {
+                alert("NO ENTRIES SELECTED!");
+                closeConfirmModal();
+                return;
+            }
+
+            recalculateSerialNumbers(); 
+            syncMultipleShipments(updates);
+            
+            alert(`${count} ENTRIES HAVE BEEN DELETED SUCCESSFULLY!`);
+            
+            updateDataTable();
+            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+            if(typeof renderAdminShipmentsTable === 'function') renderAdminShipmentsTable();
+            
+            let selectAllBox = document.getElementById('admin-select-all');
+            if(selectAllBox) selectAllBox.checked = false;
+            
+            closeConfirmModal();
+        };
+
+        window.loadAdminEditForm = function(awb) {
+            let data = savedShipments[awb];
+            if (!data) return;
+
+            document.getElementById('admin-edit-awb-title').textContent = awb;
+            document.getElementById('admin-edit-bld').value = data.bldNo || '';
+            document.getElementById('admin-edit-manifest').value = data.manifestId || '';
+            document.getElementById('admin-edit-cancel').value = toHtmlDate(data.cancelDate);
+            
+            let remSelect = document.getElementById('admin-edit-remarks');
+            remSelect.innerHTML = '<option value="">SELECT REMARK</option>';
+            remarksOptions.forEach(rem => {
+                remSelect.innerHTML += `<option value="${rem}">${rem}</option>`;
+            });
+            remSelect.value = data.remarks || '';
+
+            document.getElementById('admin-edit-rto').value = toHtmlDate(data.rtoDate);
+            document.getElementById('admin-edit-status').value = data.status || 'OPEN';
+
+            document.getElementById('admin-edit-form').style.display = 'block';
+        };
+
+        window.closeAdminEditForm = function() {
+            document.getElementById('admin-edit-form').style.display = 'none';
+        };
+
+        window.adminUpdateEntry = function() {
+            let awb = document.getElementById('admin-edit-awb-title').textContent.trim();
+            if (!awb || !savedShipments[awb]) return;
+
+            let bld = document.getElementById('admin-edit-bld').value.trim();
+            let manifest = document.getElementById('admin-edit-manifest').value.trim();
+            
+            let cancelHTML = document.getElementById('admin-edit-cancel').value;
+            let cancel = toDbDate(cancelHTML);
+            
+            let remarks = document.getElementById('admin-edit-remarks').value;
+            
+            let rtoHTML = document.getElementById('admin-edit-rto').value;
+            let rto = toDbDate(rtoHTML);
+            
+            let status = document.getElementById('admin-edit-status').value;
+
+            if (cancelHTML && rtoHTML) {
+                let cancelObj = parseDateDDMMYYYY(cancel);
+                let rtoObj = parseDateDDMMYYYY(rto);
+                if (cancelObj && rtoObj && cancelObj > rtoObj) {
+                    alert("ERROR: CANCEL DATE CANNOT BE GREATER THAN RTO DATE!");
+                    return;
+                }
+            }
+
+            savedShipments[awb].bldNo = bld;
+            savedShipments[awb].manifestId = manifest;
+            savedShipments[awb].cancelDate = cancel;
+            savedShipments[awb].remarks = remarks;
+            savedShipments[awb].rtoDate = rto;
+            savedShipments[awb].status = status;
+
+            if(remarks !== "" && rto !== "" && rto !== "-") {
+                savedShipments[awb].isModified = true;
+            }
+
+            let cancelDateObj = parseDateDDMMYYYY(cancel);
+            let rtoObj = parseDateDDMMYYYY(rto);
+            if (rtoObj && cancelDateObj && !isNaN(cancelDateObj.getTime())) {
+                savedShipments[awb].ageing = Math.ceil((rtoObj.getTime() - cancelDateObj.getTime()) / (1000 * 3600 * 24));
+            } else {
+                savedShipments[awb].ageing = "";
+            }
+
+            let updates = {};
+            updates["savedShipments/" + awb] = savedShipments[awb];
+            syncMultipleShipments(updates);
+            
+            alert(`AWB ${awb} DETAILS UPDATED BY ADMIN!`);
+            updateDataTable();
+            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+            if(window.renderAdminShipmentsTable) renderAdminShipmentsTable();
+            document.getElementById('admin-edit-form').style.display = 'none';
+        };
+
+        window.renderAdminShipmentsTable = function() {
+            try {
+                let tbody = document.getElementById('admin-shipments-body');
+                if (!tbody) return;
+
+                let filterAwb = document.getElementById('admin-filter-awb').value.trim();
+                let filterRef = document.getElementById('admin-filter-ref').value.trim();
+                
+                let filterCancelFrom = document.getElementById('admin-filter-cancel-from').value;
+                let filterCancelTo = document.getElementById('admin-filter-cancel-to').value;
+                let filterRtoFrom = document.getElementById('admin-filter-rto-from').value;
+                let filterRtoTo = document.getElementById('admin-filter-rto-to').value;
+                
+                let filterStatus = document.getElementById('admin-filter-status').value;
+
+                let keys = Object.keys(savedShipments).filter(k => savedShipments[k]);
+                keys.sort((a, b) => (parseInt(savedShipments[b].slNo) || 0) - (parseInt(savedShipments[a].slNo) || 0));
+
+                let htmlBuffer = "";
+
+                keys.forEach(awb => {
+                    let s = savedShipments[awb];
+                    if (!s) return;
+
+                    let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
+
+                    let mMatchAwb = safeInc(awb, filterAwb);
+                    let mMatchRef = safeInc(s.refNumber, filterRef);
+                    let mMatchCancel = isDateInRange(s.cancelDate, filterCancelFrom, filterCancelTo);
+                    let mMatchRto = isDateInRange(s.rtoDate, filterRtoFrom, filterRtoTo);
+                    
+                    let mMatchStatus = true;
+                    if (filterStatus === 'OPEN') mMatchStatus = (s.status === 'OPEN');
+                    else if (filterStatus === 'CLOSED') mMatchStatus = (s.status === 'CLOSED');
+                    else if (filterStatus === 'EXCESS') mMatchStatus = (s.status === 'EXCESS');
+                    else if (filterStatus === 'RTO_RECEIVED') mMatchStatus = isReceived;
+
+                    if (mMatchAwb && mMatchRef && mMatchCancel && mMatchRto && mMatchStatus) {
+                        let bldNo = s.bldNo || '-';
+                        let refNo = s.refNumber || '-';
+                        let cancelDate = s.cancelDate || '-';
+                        let rtoDate = s.rtoDate || '-';
+                        let status = s.status || 'CLOSED';
+                        let statusColor = (status === 'CLOSED' || status === 'EXCESS') ? 'green' : '#d63031';
+
+                        htmlBuffer += `<tr>
+                            <td><input type="checkbox" class="admin-del-check" value="${awb}"></td>
+                            <td style="font-weight:bold; color: #8e44ad;">${refNo}</td>
+                            <td style="font-weight:bold;">${awb}</td>
+                            <td>${bldNo}</td>
+                            <td>${cancelDate}</td>
+                            <td>${rtoDate}</td>
+                            <td style="color:${statusColor}; font-weight:bold;">${status}</td>
+                            <td><button onclick="loadAdminEditForm('${awb}')" style="font-size:9px; padding: 2px 5px; cursor:pointer;">EDIT</button></td>
+                        </tr>`;
+                    }
+                });
+                tbody.innerHTML = htmlBuffer;
+                
+                let selectAllBox = document.getElementById('admin-select-all');
+                if(selectAllBox) selectAllBox.checked = false;
+
+            } catch(e) { console.error("Error in renderAdminShipmentsTable:", e); }
+        };
+
+        window.renderAdminUsersTable = function() {
+            try {
+                let tbody = document.getElementById('admin-users-body');
+                if(!tbody) return;
+                
+                enforceAdminUser();
+
+                let htmlBuffer = "";
+                Object.keys(usersDatabase).forEach(u => {
+                    let userObj = usersDatabase[u];
+                    if (!userObj || typeof userObj !== 'object') return;
+
+                    let bldgText = userObj.bldg || "ALL"; 
+                    let deleteBtnHtml = (u === "ADMIN") 
+                        ? `<button disabled style="font-size:9px; padding: 2px 5px; cursor:not-allowed; background-color: #b2bec3; color: white; border: none; border-radius: 2px; margin-left: 2px;">DEL</button>`
+                        : `<button onclick="adminDeleteUser('${u}')" style="font-size:9px; padding: 2px 5px; cursor:pointer; background-color: #ff7675; color: white; border: none; border-radius: 2px; margin-left: 2px;">DEL</button>`;
+                    
+                    htmlBuffer += `<tr>
+                        <td style="font-weight:bold;">${u}</td>
+                        <td>${userObj.role}</td>
+                        <td>${bldgText}</td>
+                        <td><input type="text" value="${userObj.password || ''}" id="admin-pass-${u}" style="font-size: 10px; padding: 2px; height: auto; text-transform:none; width: 85px;"></td>
+                        <td>
+                            <button onclick="resetUserPassword('${u}')" style="font-size:9px; padding: 2px 5px; cursor:pointer; background-color: #0984e3; color: white; border: none; border-radius: 2px;">RESET</button>
+                            ${deleteBtnHtml}
+                        </td>
+                    </tr>`;
+                });
+                tbody.innerHTML = htmlBuffer;
+            } catch (e) {
+                console.error("Render Users Error: ", e);
+            }
+        };
+
+        window.adminAddNewUser = function() {
+            try {
+                enforceAdminUser();
+                let newUsername = document.getElementById('admin-new-username').value.trim().toUpperCase();
+                let newRole = document.getElementById('admin-new-role').value;
+                let newBldg = document.getElementById('admin-new-bldg').value;
+                let newPassword = document.getElementById('admin-new-password').value.trim();
+
+                if (newUsername === "" || newPassword === "") {
+                    alert("PLEASE ENTER BOTH NEW USERNAME AND PASSWORD!");
+                    return;
+                }
+
+                if (usersDatabase[newUsername]) {
+                    alert("USER ALREADY EXISTS! SPECIFY A DIFFERENT USERNAME.");
+                    return;
+                }
+
+                usersDatabase[newUsername] = {
+                    role: newRole,
+                    bldg: newBldg,
+                    password: newPassword,
+                    sessionToken: "" 
+                };
+
+                syncSettingsToFirebase();
+                
+                alert(`USER "${newUsername}" SUCCESSFULLY ADDED WITH "${newRole}" ROLE IN "${newBldg}"!`);
+                
+                document.getElementById('admin-new-username').value = "";
+                document.getElementById('admin-new-password').value = "";
+                document.getElementById('admin-new-role').value = "MAKER";
+                document.getElementById('admin-new-bldg').value = "ALL";
+
+                renderAdminUsersTable();
+            } catch (e) {
+                alert("Error Adding User: " + e.message);
+            }
+        };
+
+        window.adminDeleteUser = function(usernameToDelete) {
+            if (usernameToDelete === "ADMIN") {
+                alert("ACTION DENIED: THE MASTER ADMIN ACCOUNT CANNOT BE DELETED!");
+                return;
+            }
+            if (usernameToDelete === loggedInUser) {
+                alert("ACTION DENIED: YOU CANNOT DELETE YOUR OWN LOGGED-IN ID!");
+                return;
+            }
+
+            if (confirm(`ARE YOU ABSOLUTELY SURE YOU WANT TO DELETE USER "${usernameToDelete}"?`)) {
+                delete usersDatabase[usernameToDelete];
+                syncSettingsToFirebase();
+                
+                alert(`USER "${usernameToDelete}" HAS BEEN REMOVED SUCCESSFULLY!`);
+                renderAdminUsersTable();
+            }
+        };
+
+        window.resetUserPassword = function(username) {
+            let passInput = document.getElementById(`admin-pass-${username}`);
+            let newPass = passInput.value.trim();
+
+            if (newPass === '') {
+                alert("PASSWORD CANNOT BE EMPTY!");
+                return;
+            }
+
+            usersDatabase[username].password = newPass;
+            syncSettingsToFirebase();
+            
+            alert(`PASSWORD FOR USER "${username}" HAS BEEN CHANGED TO "${newPass}"!`);
+            renderAdminUsersTable();
+        };
+
+        window.renderAdminDropdownManager = function() {
+            let listKey = document.getElementById('admin-combobox-select').value;
+            let list = listKey === 'deviceErrors' ? deviceErrors : remarksOptions;
+            let tbody = document.getElementById('admin-dropdown-options-body');
+            tbody.innerHTML = '';
+            list.forEach((opt, idx) => {
+                tbody.innerHTML += `<tr>
+                    <td>${opt}</td>
+                    <td>
+                        <button onclick="editDropdownOption('${listKey}', ${idx})" style="font-size:9px; padding: 2px 5px; cursor:pointer;">EDIT</button>
+                        <button onclick="deleteDropdownOption('${listKey}', ${idx})" style="font-size:9px; padding: 2px 5px; cursor:pointer; background: #ff7675; color: white; border: none; border-radius: 2px;">DEL</button>
+                    </td>
+                </tr>`;
+            });
+        };
+
+        window.addNewOption = function() {
+            let listKey = document.getElementById('admin-combobox-select').value;
+            let input = document.getElementById('admin-new-option-input');
+            let val = input.value.trim().toUpperCase();
+            if (val === '') { alert("VALUE CANNOT BE EMPTY!"); return; }
+            let list = listKey === 'deviceErrors' ? deviceErrors : remarksOptions;
+            if (list.includes(val)) { alert("THIS OPTION ALREADY EXISTS!"); return; }
+            list.push(val);
+            syncSettingsToFirebase();
+            input.value = '';
+            populateDropdowns();
+            renderAdminDropdownManager();
+            alert("NEW OPTION ADDED SUCCESSFULLY!");
+        };
+
+        window.editDropdownOption = function(listKey, idx) {
+            let list = listKey === 'deviceErrors' ? deviceErrors : remarksOptions;
+            let currentVal = list[idx];
+            let newVal = prompt(`EDIT VALUE FOR "${currentVal}":`, currentVal);
+            if (newVal === null) return;
+            newVal = newVal.trim().toUpperCase();
+            if (newVal === '') { alert("VALUE CANNOT BE EMPTY!"); return; }
+            list[idx] = newVal;
+            syncSettingsToFirebase();
+            populateDropdowns();
+            renderAdminDropdownManager();
+            alert("OPTION VALUE CHANGED SUCCESSFULLY!");
+        };
+
+        window.deleteDropdownOption = function(listKey, idx) {
+            let list = listKey === 'deviceErrors' ? deviceErrors : remarksOptions;
+            if (confirm(`ARE YOU SURE YOU WANT TO DELETE "${list[idx]}"?`)) {
+                list.splice(idx, 1);
+                syncSettingsToFirebase();
+                populateDropdowns();
+                renderAdminDropdownManager();
+                alert("OPTION REMOVED SUCCESSFULLY!");
+            }
+        };
+
+        window.doLogin = function(isAutoLogin = false) {
+            let selectedBldg = document.getElementById("login-bldg").value;
+            let selectedRole = document.getElementById("role").value;
+            let u = document.getElementById("username").value.trim().toUpperCase();
+            let p = document.getElementById("password").value; 
+
+            if (selectedBldg === "") { alert("PLEASE SELECT A BLDG # FIRST!"); return; }
+            if (selectedRole === "") { alert("PLEASE SELECT A ROLE FIRST!"); return; }
+            if(u === "" || p === "") { alert("PLEASE ENTER USERNAME AND PASSWORD"); return; }
+
+            if (usersDatabase && usersDatabase[u]) {
+                if (usersDatabase[u].role !== selectedRole) { alert("INVALID ROLE SELECTED FOR THIS USER!"); return; }
+                if (usersDatabase[u].bldg && usersDatabase[u].bldg !== "ALL" && usersDatabase[u].bldg !== selectedBldg) {
+                    alert(`ACCESS DENIED! User '${u}' is registered to ${usersDatabase[u].bldg}.`); return;
+                }
+                if (usersDatabase[u].password !== p) { alert("INCORRECT PASSWORD!"); return; }
+            } else {
+                if (!isFirebaseLoaded) { alert("System is connecting to server. Please try again in 2 seconds."); return; }
+                if (!usersDatabase) usersDatabase = {};
+                usersDatabase[u] = { role: selectedRole, bldg: selectedBldg, password: p, sessionToken: "" };
+            }
+
+            let currentSession = sessionStorage.getItem("sessionToken");
+            if (!isAutoLogin || !currentSession) {
+                currentSession = "SESSION_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+                sessionStorage.setItem("sessionToken", currentSession);
+            }
+            
+            usersDatabase[u].sessionToken = currentSession;
+            syncSettingsToFirebase(); 
+
+            loggedInRole = selectedRole; 
+            loggedInUser = u;
+            
+            sessionStorage.setItem("savedUser", u);
+            sessionStorage.setItem("savedRole", selectedRole);
+            sessionStorage.setItem("savedBldg", selectedBldg);
+            
+            document.getElementById("current-user-role").textContent = "ROLE: " + loggedInRole;
+            document.getElementById("current-user-name").textContent = "USER: " + loggedInUser;
+
+            let mBldFilter = document.getElementById('maker-filter-bld');
+            let acBldFilter = document.getElementById('admin-checker-filter-bld');
+            let amBldFilter = document.getElementById('admin-maker-filter-bld');
+            
+            if (selectedBldg !== "ALL") {
+                if (mBldFilter) { mBldFilter.value = selectedBldg.toUpperCase(); mBldFilter.readOnly = true; mBldFilter.style.backgroundColor = "#e1e8ed"; }
+                if (acBldFilter) { acBldFilter.value = selectedBldg.toUpperCase(); }
+                if (amBldFilter) { amBldFilter.value = selectedBldg.toUpperCase(); }
+            } else {
+                if (mBldFilter) { mBldFilter.value = ""; mBldFilter.readOnly = false; mBldFilter.style.backgroundColor = "#fff"; }
+                if (acBldFilter) { acBldFilter.value = ""; }
+                if (amBldFilter) { amBldFilter.value = ""; }
+            }
+            
+            document.getElementById("login-page").style.display = "none";
+            document.getElementById("tracker-page").style.display = "block";
+            
+            if (loggedInRole === "ADMIN") {
+                document.getElementById("maker-upload-block").style.display = "none";
+                document.getElementById("maker-view-container").style.display = "none";
+                document.getElementById("checker-layout").style.display = "none";
+                document.getElementById("admin-layout-block").style.display = "block";
+                
+                renderAdminShipmentsTable();
+                renderAdminDropdownManager();
+                renderAdminUsersTable();
+                updateDataTable(); 
+                switchAdminTab('core'); 
+            } else if (loggedInRole === "CHECKER") {
+                document.getElementById("maker-upload-block").style.display = "none";
+                document.getElementById("maker-view-container").style.display = "none";
+                document.getElementById("checker-layout").style.display = "block";
+                document.getElementById("admin-layout-block").style.display = "none";
+                
+                document.getElementById('checker-ref-input').value = "";
+                loadCheckerReference(); 
+                setTimeout(() => { document.getElementById('checker-ref-input').focus(); }, 100);
+            } else { 
+                document.getElementById("maker-upload-block").style.display = "block";
+                document.getElementById("maker-view-container").style.display = "block";
+                document.getElementById("checker-layout").style.display = "none";
+                document.getElementById("admin-layout-block").style.display = "none";
+                
+                updateDataTable();
+            }
+        }
+
+        window.doLogout = function() {
+            sessionStorage.clear(); 
+            document.getElementById("tracker-page").style.display = "none";
+            document.getElementById("login-page").style.display = "block";
+            document.getElementById("username").value = "";
+            document.getElementById("password").value = "";
+            document.getElementById("role").value = "";
+            document.getElementById("login-bldg").value = "";
+            setTimeout(() => { document.getElementById('login-bldg').focus(); }, 100);
+        }
+        
+        window.togglePassword = function() {
+            let p = document.getElementById("password");
+            if (p.type === "password") { p.type = "text"; event.target.textContent = "HIDE"; } 
+            else { p.type = "password"; event.target.textContent = "SHOW"; }
+        }
+
+        window.refreshAllData = function(btnElement) {
+            let originalText = btnElement.innerText;
+            btnElement.innerText = "🔄 REFRESHING...";
+            btnElement.disabled = true;
+
+            let baseRef = db.ref("LSP_REJECTED_SHIPMENT_TRACKER");
+
+            baseRef.once('value').then((snapshot) => {
+                if (snapshot.exists()) {
+                    let data = snapshot.val();
+                    manifestDatabase = data.manifestDatabase || {};
+                    savedShipments = data.savedShipments || {};
+                    usersDatabase = data.usersDatabase || usersDatabase;
+                    serialCounter = data.serialCounter || 1;
+                    globalRefCounter = data.globalRefCounter || 1;
+                    adminEmails = data.adminEmails || "";
+                    deviceErrors = data.deviceErrors || deviceErrors;
+                    remarksOptions = data.remarksOptions || remarksOptions;
+                    
+                    Object.keys(manifestDatabase).forEach(awb => {
+                        manifestDatabase[awb].date = normalizeDateToDDMMYYYY(manifestDatabase[awb].date);
+                    });
+
+                    Object.keys(savedShipments).forEach(awb => {
+                        let s = savedShipments[awb];
+                        s.manifestDate = normalizeDateToDDMMYYYY(s.manifestDate);
+                        s.cancelDate = normalizeDateToDDMMYYYY(s.cancelDate);
+                        s.rtoDate = normalizeDateToDDMMYYYY(s.rtoDate);
+                        let cObj = parseDateDDMMYYYY(s.cancelDate);
+                        let rObj = parseDateDDMMYYYY(s.rtoDate);
+                        if (cObj && rObj && !isNaN(cObj.getTime()) && !isNaN(rObj.getTime())) {
+                            s.ageing = Math.ceil((rObj.getTime() - cObj.getTime()) / (1000 * 3600 * 24));
+                        }
+                    });
+
+                    enforceAdminUser();
+                    recalculateSerialNumbers();
+                    saveLocalOnly(); 
+                    
+                    if (document.getElementById("tracker-page").style.display === "block") {
+                        updateDataTable();
+                        if (loggedInRole === "CHECKER") {
+                            refreshCheckerStats();
+                            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+                        } else if (loggedInRole === "ADMIN") {
+                            renderAdminShipmentsTable();
+                            renderAdminDropdownManager();
+                            renderAdminUsersTable();
+                        }
+                    }
+                }
+                
+                populateDropdowns(); 
+                updateManifestDbCount();
+                
+                btnElement.innerText = originalText;
+                btnElement.disabled = false;
+                alert("Data Synced from Server Successfully!");
+            }).catch(e => {
+                btnElement.innerText = originalText;
+                btnElement.disabled = false;
+                alert("Sync failed! Check your internet connection.");
+            });
+        };
+
+        window.onload = function() {
+            loadFromLocalStorage(); 
+            updateManifestDbCount();
+            
+            let baseRef = db.ref("LSP_REJECTED_SHIPMENT_TRACKER");
+
+            baseRef.child("savedShipments").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    savedShipments = snapshot.val();
+                    Object.keys(savedShipments).forEach(awb => {
+                        let s = savedShipments[awb];
+                        s.manifestDate = normalizeDateToDDMMYYYY(s.manifestDate);
+                        s.cancelDate = normalizeDateToDDMMYYYY(s.cancelDate);
+                        s.rtoDate = normalizeDateToDDMMYYYY(s.rtoDate);
+                        let cObj = parseDateDDMMYYYY(s.cancelDate);
+                        let rObj = parseDateDDMMYYYY(s.rtoDate);
+                        if (cObj && rObj && !isNaN(cObj.getTime()) && !isNaN(rObj.getTime())) {
+                            s.ageing = Math.ceil((rObj.getTime() - cObj.getTime()) / (1000 * 3600 * 24));
+                        }
+                    });
+
+                    recalculateSerialNumbers();
+                    saveLocalOnly(); 
+                    
+                    if (document.getElementById("tracker-page").style.display === "block") {
+                        updateDataTable();
+                        if (loggedInRole === "CHECKER") {
+                            refreshCheckerStats();
+                            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+                        } else if (loggedInRole === "ADMIN") {
+                            renderAdminShipmentsTable();
+                        }
+                    }
+                } else {
+                    savedShipments = {};
+                    saveLocalOnly();
+                    if (document.getElementById("tracker-page").style.display === "block") {
+                        updateDataTable();
+                        if (loggedInRole === "CHECKER") {
+                            refreshCheckerStats();
+                            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+                        } else if (loggedInRole === "ADMIN") {
+                            renderAdminShipmentsTable();
+                        }
+                    }
+                }
+            });
+
+            baseRef.child("usersDatabase").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    usersDatabase = snapshot.val();
+                }
+                let dbChanged = enforceAdminUser();
+                if (dbChanged) syncSettingsToFirebase();
+                saveLocalOnly();
+                if (loggedInRole === "ADMIN") renderAdminUsersTable();
+            });
+
+            baseRef.child("serialCounter").on('value', function(snapshot) {
+                if (snapshot.exists()) serialCounter = snapshot.val();
+            });
+
+            baseRef.child("globalRefCounter").on('value', function(snapshot) {
+                if (snapshot.exists()) globalRefCounter = snapshot.val();
+            });
+
+            baseRef.child("adminEmails").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    adminEmails = snapshot.val();
+                    let mailInput = document.getElementById('admin-target-emails');
+                    if(mailInput && loggedInRole === "ADMIN") mailInput.value = adminEmails;
+                }
+            });
+
+            baseRef.child("deviceErrors").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    deviceErrors = snapshot.val();
+                    populateDropdowns();
+                    if (loggedInRole === "ADMIN") renderAdminDropdownManager();
+                }
+            });
+
+            baseRef.child("remarksOptions").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    remarksOptions = snapshot.val();
+                    populateDropdowns();
+                    if (loggedInRole === "ADMIN") renderAdminDropdownManager();
+                }
+            });
+
+            baseRef.child("manifestDatabase").once('value').then((snapshot) => {
+                if (snapshot.exists()) {
+                    manifestDatabase = snapshot.val();
+                    Object.keys(manifestDatabase).forEach(awb => {
+                        manifestDatabase[awb].date = normalizeDateToDDMMYYYY(manifestDatabase[awb].date);
+                    });
+                    saveLocalOnly();
+                    updateManifestDbCount();
+                }
+            });
+
+            let savedUser = sessionStorage.getItem("savedUser");
+            let savedRole = sessionStorage.getItem("savedRole");
+            let savedBldg = sessionStorage.getItem("savedBldg");
+            let savedToken = sessionStorage.getItem("sessionToken"); 
+
+            if (savedUser && savedRole && savedBldg && usersDatabase && usersDatabase[savedUser]) {
+                if (usersDatabase[savedUser].sessionToken === savedToken || usersDatabase[savedUser].sessionToken === "") {
+                    document.getElementById("login-bldg").value = savedBldg;
+                    document.getElementById("username").value = savedUser;
+                    document.getElementById("role").value = savedRole;
+                    document.getElementById("password").value = usersDatabase[savedUser].password;
+                    doLogin(true); 
+                } else {
+                    sessionStorage.clear(); 
+                }
+            }
+        };
+    </script>
+</body>
+</html>
