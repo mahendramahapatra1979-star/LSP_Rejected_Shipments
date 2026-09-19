@@ -677,28 +677,39 @@
             return new Date(p[0], parseInt(p[1]) - 1, p[2]).getTime();
         }
 
+        // Fortified Date Parser to prevent silent drop of improperly formatted dates
         function parseDbDate(dbDateStr) {
             if (!dbDateStr || dbDateStr === '-') return null;
-            let p = dbDateStr.trim().split('-');
+            let p = dbDateStr.trim().split(/[-/]/);
             if (p.length !== 3) return null;
+            if(p[0].length === 4) {
+                return new Date(p[0], parseInt(p[1]) - 1, p[2]).getTime();
+            }
             return new Date(p[2], parseInt(p[1]) - 1, p[0]).getTime();
         }
 
         function isDateInRange(dbDateStr, fromVal, toVal) {
             if (!fromVal && !toVal) return true; 
+            
             let dbTime = parseDbDate(dbDateStr);
             if (!dbTime) return false; 
             
             let fromTime = parseHtmlDate(fromVal) || -Infinity;
             let toTime = parseHtmlDate(toVal) || Infinity;
             
+            // Adjust toTime to include the end of the day bounds
+            if (toTime !== Infinity) {
+                toTime += 86399999;
+            }
+            
             return dbTime >= fromTime && dbTime <= toTime;
         }
 
         function toHtmlDate(dbDateStr) {
             if(!dbDateStr || dbDateStr === '-') return '';
-            let p = dbDateStr.split('-');
+            let p = dbDateStr.trim().split(/[-/]/);
             if(p.length !== 3) return '';
+            if(p[0].length === 4) return `${p[0]}-${p[1].padStart(2,'0')}-${p[2].padStart(2,'0')}`;
             return `${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`;
         }
 
@@ -711,8 +722,9 @@
 
         function parseDateDDMMYYYY(dateStr) {
             if (!dateStr || typeof dateStr !== 'string' || dateStr.trim() === '' || dateStr === '-') return null;
-            let parts = dateStr.trim().split('-');
+            let parts = dateStr.trim().split(/[-/]/);
             if (parts.length !== 3) return null;
+            if(parts[0].length === 4) return new Date(parts[0], parseInt(parts[1]) - 1, parts[2]);
             return new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
         }
         
@@ -752,7 +764,6 @@
                      if (cleanVal.includes('BLD') && cleanVal.includes(numMatch[0])) return true;
                  }
             }
-            
             return false;
         };
 
@@ -870,7 +881,7 @@
         function syncManifestToFirebase() {
             saveLocalOnly();
             if (!isFirebaseLoaded) return;
-            let cleanManifest = JSON.parse(JSON.stringify(manifestDatabase));
+            let cleanManifest = JSON.parse(JSON.stringify(manifestDatabase || {}));
             db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").set(cleanManifest)
                 .catch(e => alert("⚠️ Manifest Upload Failed: " + e.message));
         }
@@ -878,10 +889,10 @@
         function loadFromLocalStorage() {
             try {
                 let storedManifest = localStorage.getItem("lsp_manifestDatabase");
-                if (storedManifest) manifestDatabase = JSON.parse(storedManifest);
+                if (storedManifest) manifestDatabase = JSON.parse(storedManifest) || {};
 
                 let storedShipments = localStorage.getItem("lsp_savedShipments");
-                if (storedShipments) savedShipments = JSON.parse(storedShipments);
+                if (storedShipments) savedShipments = JSON.parse(storedShipments) || {};
 
                 let storedUsers = localStorage.getItem("lsp_usersDatabase");
                 if (storedUsers) {
@@ -892,25 +903,25 @@
                 }
 
                 let storedLogs = localStorage.getItem("lsp_deletedLogs");
-                if (storedLogs) deletedLogsDatabase = JSON.parse(storedLogs);
+                if (storedLogs) deletedLogsDatabase = JSON.parse(storedLogs) || {};
 
                 let storedCounter = localStorage.getItem("lsp_serialCounter");
-                if (storedCounter) serialCounter = parseInt(storedCounter);
+                if (storedCounter) serialCounter = parseInt(storedCounter) || 1;
 
                 let storedRefCounter = localStorage.getItem("lsp_globalRefCounter");
-                if (storedRefCounter) globalRefCounter = parseInt(storedRefCounter);
+                if (storedRefCounter) globalRefCounter = parseInt(storedRefCounter) || 1;
                 
                 let storedRefYear = localStorage.getItem("lsp_lastRefYear");
-                if (storedRefYear) lastRefYear = parseInt(storedRefYear);
+                if (storedRefYear) lastRefYear = parseInt(storedRefYear) || new Date().getFullYear();
 
                 let storedEmails = localStorage.getItem("lsp_adminEmails");
                 if (storedEmails) adminEmails = storedEmails;
 
                 let storedErrors = localStorage.getItem("lsp_deviceErrors");
-                if (storedErrors) deviceErrors = JSON.parse(storedErrors);
+                if (storedErrors) deviceErrors = JSON.parse(storedErrors) || deviceErrors;
 
                 let storedRemarks = localStorage.getItem("lsp_remarksOptions");
-                if (storedRemarks) remarksOptions = JSON.parse(storedRemarks);
+                if (storedRemarks) remarksOptions = JSON.parse(storedRemarks) || remarksOptions;
             } catch(e) {}
             enforceAdminUser();
             recalculateSerialNumbers();
@@ -932,8 +943,70 @@
 
         function updateManifestDbCount() {
             let el = document.getElementById('manifest-db-count');
-            if(el) el.innerText = Object.keys(manifestDatabase).length;
+            if(el) el.innerText = Object.keys(manifestDatabase || {}).length;
         }
+
+        // ==========================================
+        // ADDED MISSING MANIFEST UPLOAD FUNCTION
+        // ==========================================
+        window.processManifestUpload = function(btnElement) {
+            let fileInput = document.getElementById('csv-upload');
+            let file = fileInput.files[0];
+            if (!file) {
+                alert("PLEASE SELECT A MANIFEST CSV FILE FIRST!");
+                return;
+            }
+
+            let ogText = btnElement.innerText;
+            btnElement.innerText = "⏳ UPLOADING...";
+            btnElement.disabled = true;
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                setTimeout(() => {
+                    try {
+                        let lines = e.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
+                        if (lines.length <= 1) {
+                            alert("CSV IS EMPTY OR HAS NO DATA ROWS!");
+                            return;
+                        }
+
+                        if (!manifestDatabase) manifestDatabase = {};
+                        let count = 0;
+                        
+                        // Assumes columns: 0:AWB, 1:BLD, 2:MANIFEST ID, 3:CHANNEL, 4:TRANSPORTER, 5:ORDER ID, 6:DATE
+                        for (let i = 1; i < lines.length; i++) {
+                            let cols = parseCSVRow(lines[i]).map(c => c.trim());
+                            let rawAwb = cols[0];
+                            let awb = rawAwb ? rawAwb.toUpperCase().replace(/[\.\#\$\/\[\]]/g, '') : "";
+                            
+                            if (!awb) continue;
+
+                            manifestDatabase[awb] = {
+                                bld: cols[1] || "-",
+                                manifest: cols[2] || "-",
+                                channel: cols[3] || "-",
+                                transporter: cols[4] || "-",
+                                order: cols[5] || "-",
+                                date: normalizeDateToDDMMYYYY(cols[6] || "-")
+                            };
+                            count++;
+                        }
+
+                        syncManifestToFirebase();
+                        updateManifestDbCount();
+                        alert(`✅ MANIFEST UPLOAD SUCCESSFUL!\n${count} records added to database.`);
+                    } catch (error) {
+                        alert("⚠️ Error processing file: " + error.message);
+                    } finally {
+                        btnElement.innerText = ogText;
+                        btnElement.disabled = false;
+                        fileInput.value = '';
+                    }
+                }, 50);
+            };
+            reader.readAsText(file);
+        };
 
         window.clearManifestDatabase = function() {
             if(confirm("ARE YOU SURE YOU WANT TO CLEAR THE MANIFEST DATABASE? \n\nNote: This will NOT affect your saved shipments or tracker data.")) {
@@ -970,6 +1043,7 @@
         }
 
         function recalculateSerialNumbers() {
+            if(!savedShipments) savedShipments = {};
             let keys = Object.keys(savedShipments).filter(awb => savedShipments[awb]);
             if (keys.length === 0) { serialCounter = 1; return; }
             keys.sort((a, b) => {
@@ -987,6 +1061,8 @@
 
         window.updateDataTable = function() {
             try {
+                if(!savedShipments) savedShipments = {};
+                
                 let tbody = document.getElementById('saved-data-body');
                 let adminMakerBody = document.getElementById('admin-maker-body');
                 
@@ -1002,16 +1078,13 @@
                 
                 let mkRtoFrom = document.getElementById('maker-filter-rto-from') ? document.getElementById('maker-filter-rto-from').value : '';
                 let mkRtoTo = document.getElementById('maker-filter-rto-to') ? document.getElementById('maker-filter-rto-to').value : '';
-                
                 let mkStatus = document.getElementById('maker-filter-status') ? document.getElementById('maker-filter-status').value : '';
 
                 let amBld = document.getElementById('admin-maker-filter-bld') ? document.getElementById('admin-maker-filter-bld').value.trim() : '';
                 let amAwb = document.getElementById('admin-maker-filter-awb') ? document.getElementById('admin-maker-filter-awb').value.trim() : '';
                 let amRef = document.getElementById('admin-maker-filter-ref') ? document.getElementById('admin-maker-filter-ref').value.trim() : '';
-                
                 let amRtoFrom = document.getElementById('admin-maker-filter-rto-from') ? document.getElementById('admin-maker-filter-rto-from').value : '';
                 let amRtoTo = document.getElementById('admin-maker-filter-rto-to') ? document.getElementById('admin-maker-filter-rto-to').value : '';
-                
                 let amStatus = document.getElementById('admin-maker-filter-status') ? document.getElementById('admin-maker-filter-status').value : '';
 
                 dataArr.forEach(s => {
@@ -1034,7 +1107,10 @@
                         <td style="${receivingStyle}">${receivingStatusText}</td>
                     </tr>`;
 
-                    let isMyUpload = (s.makerBldg && mkBld && s.makerBldg.toUpperCase() === mkBld.toUpperCase());
+                    // Safely check `.toUpperCase()` for nulls
+                    let sMakerBldgSafe = s.makerBldg || '';
+                    let isMyUpload = (sMakerBldgSafe && mkBld && sMakerBldgSafe.toUpperCase() === mkBld.toUpperCase());
+                    
                     let mMatchBld = mkBld === "" || safeInc(displayBld, mkBld) || isMyUpload;
                     let mMatchAwb = mkAwb === "" || safeInc(s.awb, mkAwb);
                     let mMatchRef = mkRef === "" || safeInc(s.refNumber, mkRef);
@@ -1088,6 +1164,7 @@
 
         function refreshCheckerStats() {
             if(!checkerActiveRef) return;
+            if(!savedShipments) savedShipments = {};
             
             let total = [], scanned = [], pending = [], excess = [];
 
@@ -1130,6 +1207,7 @@
                 alert("PLEASE ENTER & LOAD A REFERENCE NUMBER FIRST!");
                 return;
             }
+            if(!savedShipments) savedShipments = {};
             
             let scanInput = document.getElementById('checker-awb-input');
             let scanAwb = scanInput.value.trim().toUpperCase().replace(/[\.\#\$\/\[\]]/g, '');
@@ -1151,7 +1229,7 @@
                     scanInput.value = ""; return;
                 }
 
-                let row = manifestDatabase[scanAwb] || {};
+                let row = (manifestDatabase && manifestDatabase[scanAwb]) ? manifestDatabase[scanAwb] : {};
 
                 savedShipments[scanAwb] = {
                     slNo: serialCounter++,
@@ -1212,6 +1290,8 @@
 
         window.updateCheckerTable = function() {
             try {
+                if(!savedShipments) savedShipments = {};
+                
                 let tbody = document.getElementById('checker-data-body'); 
                 let adminCheckerBody = document.getElementById('admin-checker-body'); 
                 
@@ -1320,6 +1400,8 @@
         };
 
         window.generateReport = function() {
+            if(!savedShipments) savedShipments = {};
+            
             let fromVal = document.getElementById('report-date-from').value;
             let toVal = document.getElementById('report-date-to').value;
             let bldFilter = document.getElementById('report-bld-filter').value.trim();
@@ -1374,6 +1456,7 @@
         };
 
         function getFilteredDataForExport(roleView) {
+            if(!savedShipments) savedShipments = {};
             let dataArr = Object.keys(savedShipments).map(awb => ({ awb, ...savedShipments[awb] }));
             dataArr.sort((a, b) => (parseInt(b.slNo) || 0) - (parseInt(a.slNo) || 0));
 
@@ -1396,7 +1479,8 @@
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
                     let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
                     
-                    let isMyUpload = (s.makerBldg && mkBld && s.makerBldg.toUpperCase() === mkBld.toUpperCase());
+                    let sMakerBldgSafe = s.makerBldg || '';
+                    let isMyUpload = (sMakerBldgSafe && mkBld && sMakerBldgSafe.toUpperCase() === mkBld.toUpperCase());
                     let mMatchBld = mkBld === "" || safeInc(displayBld, mkBld) || isMyUpload;
                     let mMatchAwb = mkAwb === "" || safeInc(s.awb, mkAwb);
                     let mMatchRef = mkRef === "" || safeInc(s.refNumber, mkRef);
@@ -1510,6 +1594,9 @@
         };
 
         window.processUnifiedBulkUpload = function(btnElement) {
+            if(!manifestDatabase) manifestDatabase = {};
+            if(!savedShipments) savedShipments = {};
+            
             let fileInput = document.getElementById('unified-bulk-csv-upload');
             let file = fileInput.files[0];
             if (!file) {
@@ -1720,6 +1807,7 @@
         };
 
         window.loadAdminEditForm = function(awb) {
+            if(!savedShipments) return;
             let data = savedShipments[awb];
             if (!data) return;
 
@@ -1748,7 +1836,7 @@
 
         window.adminUpdateEntry = function() {
             let awb = document.getElementById('admin-edit-awb-title').textContent.trim();
-            if (!awb || !savedShipments[awb]) return;
+            if (!awb || !savedShipments || !savedShipments[awb]) return;
 
             let bld = document.getElementById('admin-edit-bld').value.trim();
             let manifest = document.getElementById('admin-edit-manifest').value.trim();
@@ -1804,6 +1892,7 @@
 
         window.renderAdminShipmentsTable = function() {
             try {
+                if(!savedShipments) savedShipments = {};
                 let tbody = document.getElementById('admin-shipments-body');
                 if (!tbody) return;
 
@@ -1827,7 +1916,6 @@
                     if (!s) return;
 
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
-
                     let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
 
                     let mMatchAwb = safeInc(awb, filterAwb);
@@ -1868,8 +1956,68 @@
             } catch(e) { console.error("Error in renderAdminShipmentsTable:", e); }
         };
 
+        window.promptAdminDelete = function() {
+            let checks = document.querySelectorAll('.admin-del-check:checked');
+            if (checks.length === 0) {
+                alert("PLEASE SELECT AT LEAST ONE ENTRY TO DELETE!");
+                return;
+            }
+            document.getElementById('custom-confirm-modal').style.display = 'flex';
+        };
+
+        window.closeConfirmModal = function() {
+            document.getElementById('custom-confirm-modal').style.display = 'none';
+        };
+
+        window.executeBulkDelete = function() {
+            closeConfirmModal();
+            let checks = document.querySelectorAll('.admin-del-check:checked');
+            
+            let today = new Date();
+            let dd = String(today.getDate()).padStart(2, '0');
+            let mm = String(today.getMonth() + 1).padStart(2, '0');
+            let yyyy = today.getFullYear();
+            let formattedDate = `${dd}-${mm}-${yyyy}`;
+            
+            let updates = {};
+            let logUpdates = {};
+            
+            checks.forEach(chk => {
+                let awb = chk.value;
+                if(savedShipments[awb]) {
+                    let logId = "DEL_" + Date.now() + "_" + Math.floor(Math.random()*1000);
+                    let delLog = {
+                        refNumber: savedShipments[awb].refNumber || '-',
+                        refDate: savedShipments[awb].cancelDate || '-',
+                        awb: awb,
+                        removedDate: formattedDate
+                    };
+                    
+                    logUpdates["deletedLogsDatabase/" + logId] = delLog;
+                    updates["savedShipments/" + awb] = null; // deletes from firebase
+                    
+                    deletedLogsDatabase[logId] = delLog;
+                    delete savedShipments[awb];
+                }
+            });
+
+            syncMultipleShipments({...updates, ...logUpdates});
+            alert(`SUCCESSFULLY DELETED ${checks.length} RECORDS.`);
+            
+            updateDataTable();
+            if(typeof updateCheckerTable === 'function') updateCheckerTable();
+            renderAdminShipmentsTable();
+            renderDeletedLogsTable();
+        };
+
+        window.toggleAllAdminCheckboxes = function(masterbox) {
+            let checks = document.querySelectorAll('.admin-del-check');
+            checks.forEach(chk => chk.checked = masterbox.checked);
+        };
+
         window.renderDeletedLogsTable = function() {
             try {
+                if(!deletedLogsDatabase) deletedLogsDatabase = {};
                 let tbody = document.getElementById('admin-deleted-logs-body');
                 if(!tbody) return;
                 
@@ -1898,6 +2046,7 @@
 
         window.renderAdminUsersTable = function() {
             try {
+                if(!usersDatabase) usersDatabase = {};
                 let tbody = document.getElementById('admin-users-body');
                 if(!tbody) return;
                 
@@ -2243,7 +2392,7 @@
 
             baseRef.child("savedShipments").on('value', function(snapshot) {
                 if (snapshot.exists()) {
-                    savedShipments = snapshot.val();
+                    savedShipments = snapshot.val() || {};
                     Object.keys(savedShipments).forEach(awb => {
                         let s = savedShipments[awb];
                         s.manifestDate = normalizeDateToDDMMYYYY(s.manifestDate);
@@ -2285,7 +2434,7 @@
 
             baseRef.child("usersDatabase").on('value', function(snapshot) {
                 if (snapshot.exists()) {
-                    usersDatabase = snapshot.val();
+                    usersDatabase = snapshot.val() || {};
                 }
                 let dbChanged = enforceAdminUser();
                 if (dbChanged) syncSettingsToFirebase();
@@ -2295,7 +2444,7 @@
 
             baseRef.child("deletedLogsDatabase").on('value', function(snapshot) {
                 if (snapshot.exists()) {
-                    deletedLogsDatabase = snapshot.val();
+                    deletedLogsDatabase = snapshot.val() || {};
                 } else {
                     deletedLogsDatabase = {};
                 }
@@ -2304,15 +2453,15 @@
             });
 
             baseRef.child("serialCounter").on('value', function(snapshot) {
-                if (snapshot.exists()) serialCounter = snapshot.val();
+                if (snapshot.exists()) serialCounter = snapshot.val() || 1;
             });
 
             baseRef.child("globalRefCounter").on('value', function(snapshot) {
-                if (snapshot.exists()) globalRefCounter = snapshot.val();
+                if (snapshot.exists()) globalRefCounter = snapshot.val() || 1;
             });
 
             baseRef.child("lastRefYear").on('value', function(snapshot) {
-                if (snapshot.exists()) lastRefYear = snapshot.val();
+                if (snapshot.exists()) lastRefYear = snapshot.val() || new Date().getFullYear();
             });
 
             baseRef.child("adminEmails").on('value', function(snapshot) {
@@ -2341,7 +2490,7 @@
 
             baseRef.child("manifestDatabase").once('value').then((snapshot) => {
                 if (snapshot.exists()) {
-                    manifestDatabase = snapshot.val();
+                    manifestDatabase = snapshot.val() || {};
                     Object.keys(manifestDatabase).forEach(awb => {
                         manifestDatabase[awb].date = normalizeDateToDDMMYYYY(manifestDatabase[awb].date);
                     });
