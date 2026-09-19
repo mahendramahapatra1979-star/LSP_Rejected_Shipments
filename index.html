@@ -93,7 +93,7 @@
 </head>
 <body>
 
-    <!-- CUSTOM CONFIRM MODAL FOR BULK DELETE -->
+    <!-- CUSTOM CONFIRM MODAL -->
     <div id="custom-confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
         <div style="background:#fff; padding:25px; border-radius:8px; box-shadow:0 5px 15px rgba(0,0,0,0.3); text-align:center; max-width: 350px;">
             <h3 style="margin-top:0; color:#d63031; border-bottom:none;">WARNING</h3>
@@ -740,13 +740,17 @@
             
             if (cleanVal.includes(cleanFilter)) return true;
             
-            if (cleanFilter.includes('BLDG')) {
-                let altFilter = cleanFilter.replace('BLDG', 'BLD');
-                if (cleanVal.includes(altFilter)) return true;
-            }
-            if (cleanFilter.includes('BLD')) {
-                let altFilter = cleanFilter.replace('BLD', 'BLDG');
-                if (cleanVal.includes(altFilter)) return true;
+            let altFilter1 = cleanFilter.replace('BLDG', 'BLD');
+            if (cleanVal.includes(altFilter1)) return true;
+            
+            let altFilter2 = cleanFilter.replace('BLD', 'BLDG');
+            if (cleanVal.includes(altFilter2)) return true;
+            
+            let numMatch = cleanFilter.match(/\d+/);
+            if (numMatch && cleanVal.includes(numMatch[0])) {
+                 if (cleanFilter.includes('BLD')) {
+                     if (cleanVal.includes('BLD') && cleanVal.includes(numMatch[0])) return true;
+                 }
             }
             
             return false;
@@ -1016,7 +1020,7 @@
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
                     let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
                     
-                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
 
                     let rowHtml = `<tr>
                         <td>${s.slNo || '-'}</td>
@@ -1030,9 +1034,10 @@
                         <td style="${receivingStyle}">${receivingStatusText}</td>
                     </tr>`;
 
-                    let mMatchBld = safeInc(displayBld, mkBld);
-                    let mMatchAwb = safeInc(s.awb, mkAwb);
-                    let mMatchRef = safeInc(s.refNumber, mkRef);
+                    let isMyUpload = (s.makerBldg && mkBld && s.makerBldg.toUpperCase() === mkBld.toUpperCase());
+                    let mMatchBld = mkBld === "" || safeInc(displayBld, mkBld) || isMyUpload;
+                    let mMatchAwb = mkAwb === "" || safeInc(s.awb, mkAwb);
+                    let mMatchRef = mkRef === "" || safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
                     let mMatchStatus = true;
                     if (mkStatus === 'OPEN') mMatchStatus = (s.status === 'OPEN');
@@ -1042,9 +1047,9 @@
 
                     if (mMatchBld && mMatchAwb && mMatchRef && mMatchRto && mMatchStatus) htmlBuffer += rowHtml;
 
-                    let amMatchBld = safeInc(displayBld, amBld);
-                    let amMatchAwb = safeInc(s.awb, amAwb);
-                    let amMatchRef = safeInc(s.refNumber, amRef);
+                    let amMatchBld = amBld === "" || safeInc(displayBld, amBld) || safeInc(s.makerBldg, amBld);
+                    let amMatchAwb = amAwb === "" || safeInc(s.awb, amAwb);
+                    let amMatchRef = amRef === "" || safeInc(s.refNumber, amRef);
                     let amMatchRto = isDateInRange(s.rtoDate, amRtoFrom, amRtoTo);
                     let amMatchStatus = true;
                     if (amStatus === 'OPEN') amMatchStatus = (s.status === 'OPEN');
@@ -1231,7 +1236,7 @@
                     let receivingStatusText = s.receivingStatus || "-";
                     let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
                     
-                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
 
                     let rowHTML = `<tr>
                         <td>${s.slNo || '-'}</td>
@@ -1257,9 +1262,9 @@
                     }
 
                     if (s.status === "CLOSED" || s.status === "EXCESS" || s.isModified) {
-                        let acMatchBld = safeInc(displayBld, acBld);
-                        let acMatchAwb = safeInc(s.awb, acAwb);
-                        let acMatchRef = safeInc(s.refNumber, acRef);
+                        let acMatchBld = acBld === "" || safeInc(displayBld, acBld) || safeInc(s.makerBldg, acBld);
+                        let acMatchAwb = acAwb === "" || safeInc(s.awb, acAwb);
+                        let acMatchRef = acRef === "" || safeInc(s.refNumber, acRef);
                         let acMatchRto = isDateInRange(s.rtoDate, acRtoFrom, acRtoTo);
                         
                         let acMatchStatus = true;
@@ -1325,11 +1330,18 @@
             Object.keys(savedShipments).forEach(awb => {
                 let s = savedShipments[awb];
                 let dateToUse = s.uploadDate || s.cancelDate || '-';
-                if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
+                
+                if (fromVal || toVal) {
+                    if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
+                }
+                
                 if (!s.refNumber || s.refNumber === '-') return; 
                 
-                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
-                if (!safeInc(displayBld, bldFilter)) return;
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
+                
+                if (bldFilter !== "") {
+                    if (!safeInc(displayBld, bldFilter) && !safeInc(s.makerBldg, bldFilter)) return;
+                }
 
                 let key = dateToUse + "|||" + s.refNumber + "|||" + displayBld;
                 if(!grouped[key]) grouped[key] = [];
@@ -1382,11 +1394,12 @@
 
                 return dataArr.filter(s => {
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
-                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
                     
-                    let mMatchBld = safeInc(displayBld, mkBld);
-                    let mMatchAwb = safeInc(s.awb, mkAwb);
-                    let mMatchRef = safeInc(s.refNumber, mkRef);
+                    let isMyUpload = (s.makerBldg && mkBld && s.makerBldg.toUpperCase() === mkBld.toUpperCase());
+                    let mMatchBld = mkBld === "" || safeInc(displayBld, mkBld) || isMyUpload;
+                    let mMatchAwb = mkAwb === "" || safeInc(s.awb, mkAwb);
+                    let mMatchRef = mkRef === "" || safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
                     let mMatchStatus = true;
                     
@@ -1411,7 +1424,7 @@
                 let err = (s.errSel || s.errTxt || '').replace(/"/g, '""'); 
                 let remarks = (s.remarks || '').replace(/"/g, '""');
                 let receivingStatus = (s.receivingStatus || '-').replace(/"/g, '""');
-                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
 
                 let row = [
                     s.slNo || '-', s.refNumber || '-', displayBld, s.awb || '-', s.manifestId || '-', s.channel || '-',
@@ -1440,7 +1453,8 @@
             data.forEach(s => {
                 let statusColor = (s.status === "CLOSED" || s.status === "EXCESS") ? "green" : "#d63031";
                 let recColor = (s.receivingStatus && String(s.receivingStatus).includes("RECEIVED")) ? "green" : "#000";
-                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
+                
                 html += `<tr>
                     <td>${s.slNo || '-'}</td><td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
                     <td>${displayBld}</td><td style="font-weight:bold;">${s.awb}</td>
@@ -1814,7 +1828,7 @@
 
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
 
-                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg && s.makerBldg !== '-' ? s.makerBldg : '-');
 
                     let mMatchAwb = safeInc(awb, filterAwb);
                     let mMatchRef = safeInc(s.refNumber, filterRef);
