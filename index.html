@@ -368,8 +368,6 @@
             
             <div class="admin-nav">
                 <button id="tab-btn-core" class="active" onclick="switchAdminTab('core')">⚙️ Admin Section</button>
-                <button id="tab-btn-maker" onclick="switchAdminTab('maker')">📝 Maker Section</button>
-                <button id="tab-btn-checker" onclick="switchAdminTab('checker')">✅ Checker Section</button>
             </div>
 
             <div id="admin-core-section" class="admin-tab-content active">
@@ -714,6 +712,22 @@
             let parts = dateStr.trim().split('-');
             if (parts.length !== 3) return null;
             return new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
+        }
+        
+        function normalizeDateToDDMMYYYY(dateStr) {
+            if (!dateStr || dateStr === '-') return '-';
+            dateStr = dateStr.split(' ')[0]; 
+            if (dateStr.includes('-')) {
+                let parts = dateStr.split('-');
+                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`; 
+                return dateStr; 
+            }
+            if (dateStr.includes('/')) {
+                let parts = dateStr.split('/');
+                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                return `${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}-${parts[2]}`; 
+            }
+            return dateStr;
         }
 
         const safeInc = (val, filter) => {
