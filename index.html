@@ -125,7 +125,11 @@
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
                 <label style="font-weight:bold; font-size:12px;">BLD FILTER:</label>
-                <input type="text" id="report-bld-filter" placeholder="BLD NO" style="padding: 5px; border: 1px solid #ccd1d9; border-radius: 4px; font-size: 12px; width: 120px; text-transform: uppercase;" oninput="generateReport()">
+                <select id="report-bld-filter" style="padding: 4px; border: 1px solid #ccd1d9; border-radius: 4px; font-size: 12px; width: 120px; height: 26px;" onchange="generateReport()">
+                    <option value="">ALL BLDGs</option>
+                    <option value="Bldg#3">Bldg#3</option>
+                    <option value="Bldg#5">Bldg#5</option>
+                </select>
                 
                 <label style="font-weight:bold; font-size:12px; margin-left: 10px;">DATE RANGE:</label>
                 <div class="date-range-container">
