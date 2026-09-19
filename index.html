@@ -677,7 +677,6 @@
             return new Date(p[0], parseInt(p[1]) - 1, p[2]).getTime();
         }
 
-        // Fortified Date Parser to prevent silent drop of improperly formatted dates
         function parseDbDate(dbDateStr) {
             if (!dbDateStr || dbDateStr === '-') return null;
             let p = dbDateStr.trim().split(/[-/]/);
@@ -697,7 +696,6 @@
             let fromTime = parseHtmlDate(fromVal) || -Infinity;
             let toTime = parseHtmlDate(toVal) || Infinity;
             
-            // Adjust toTime to include the end of the day bounds
             if (toTime !== Infinity) {
                 toTime += 86399999;
             }
@@ -947,7 +945,7 @@
         }
 
         // ==========================================
-        // ADDED MISSING MANIFEST UPLOAD FUNCTION
+        // DYNAMIC MANIFEST UPLOAD FUNCTION
         // ==========================================
         window.processManifestUpload = function(btnElement) {
             let fileInput = document.getElementById('csv-upload');
@@ -972,30 +970,60 @@
                         }
 
                         if (!manifestDatabase) manifestDatabase = {};
+                        
+                        // Parse Headers dynamically
+                        let headers = parseCSVRow(lines[0]).map(h => h.trim().toUpperCase());
+                        
+                        let awbIdx = headers.indexOf("AWB NUMBER");
+                        let bldIdx = headers.indexOf("FULFILLMENT LOCATION NAME");
+                        let manifestIdx = headers.indexOf("MANIFEST ID");
+                        let channelIdx = headers.indexOf("SALES CHANNEL");
+                        let transIdx = headers.indexOf("TRANSPORTER");
+                        let orderIdx = headers.indexOf("CHANNEL ORDER ID");
+                        let dateIdx = headers.indexOf("MANIFEST CREATED TIME");
+
+                        // Fallbacks just in case the format slightly deviates
+                        if(awbIdx === -1) awbIdx = 11;
+                        if(bldIdx === -1) bldIdx = 1;
+                        if(manifestIdx === -1) manifestIdx = 3;
+                        if(channelIdx === -1) channelIdx = 6;
+                        if(transIdx === -1) transIdx = 10;
+                        if(orderIdx === -1) orderIdx = 7;
+                        if(dateIdx === -1) dateIdx = 12;
+
                         let count = 0;
                         
-                        // Assumes columns: 0:AWB, 1:BLD, 2:MANIFEST ID, 3:CHANNEL, 4:TRANSPORTER, 5:ORDER ID, 6:DATE
                         for (let i = 1; i < lines.length; i++) {
-                            let cols = parseCSVRow(lines[i]).map(c => c.trim());
-                            let rawAwb = cols[0];
-                            let awb = rawAwb ? rawAwb.toUpperCase().replace(/[\.\#\$\/\[\]]/g, '') : "";
+                            let cols = parseCSVRow(lines[i]);
+                            if(cols.length <= awbIdx) continue; 
+                            
+                            let rawAwb = cols[awbIdx] ? cols[awbIdx].trim() : "";
+                            let awb = rawAwb.toUpperCase().replace(/[\.\#\$\/\[\]]/g, '');
                             
                             if (!awb) continue;
 
+                            let rawBld = cols[bldIdx] ? cols[bldIdx].trim() : "-";
+                            if (rawBld.toUpperCase().includes("BLDG5") || rawBld.toUpperCase().includes("BLDG 5")) rawBld = "Bldg#5";
+                            else if (rawBld.toUpperCase().includes("BLDG3") || rawBld.toUpperCase().includes("BLDG 3")) rawBld = "Bldg#3";
+
+                            let rawDate = cols[dateIdx] ? cols[dateIdx].trim() : "-";
+
                             manifestDatabase[awb] = {
-                                bld: cols[1] || "-",
-                                manifest: cols[2] || "-",
-                                channel: cols[3] || "-",
-                                transporter: cols[4] || "-",
-                                order: cols[5] || "-",
-                                date: normalizeDateToDDMMYYYY(cols[6] || "-")
+                                bld: rawBld,
+                                manifest: cols[manifestIdx] ? cols[manifestIdx].trim() : "-",
+                                channel: cols[channelIdx] ? cols[channelIdx].trim() : "-",
+                                transporter: cols[transIdx] ? cols[transIdx].trim() : "-",
+                                order: cols[orderIdx] ? cols[orderIdx].trim() : "-",
+                                date: normalizeDateToDDMMYYYY(rawDate)
                             };
                             count++;
                         }
 
                         syncManifestToFirebase();
                         updateManifestDbCount();
-                        alert(`✅ MANIFEST UPLOAD SUCCESSFUL!\n${count} records added to database.`);
+                        
+                        let dbTotal = Object.keys(manifestDatabase).length;
+                        alert(`✅ MANIFEST UPLOAD SUCCESSFUL!\n${count} rows processed.\nTotal Unique AWBs in Database: ${dbTotal}`);
                     } catch (error) {
                         alert("⚠️ Error processing file: " + error.message);
                     } finally {
@@ -1107,7 +1135,6 @@
                         <td style="${receivingStyle}">${receivingStatusText}</td>
                     </tr>`;
 
-                    // Safely check `.toUpperCase()` for nulls
                     let sMakerBldgSafe = s.makerBldg || '';
                     let isMyUpload = (sMakerBldgSafe && mkBld && sMakerBldgSafe.toUpperCase() === mkBld.toUpperCase());
                     
@@ -1141,9 +1168,6 @@
             } catch(e) { console.error("Error in updateDataTable:", e); }
         };
 
-        // ==========================================
-        // CHECKER DASHBOARD & SCANNING LOGIC
-        // ==========================================
         window.loadCheckerReference = function() {
             let refInput = document.getElementById('checker-ref-input').value.trim().toUpperCase();
             if(refInput === "") {
@@ -1379,9 +1403,6 @@
             alert("Admin Target Emails saved successfully!");
         };
 
-        // ==========================================
-        // REPORT MODAL LOGIC
-        // ==========================================
         window.openReportModal = function() {
             let today = new Date();
             let dd = String(today.getDate()).padStart(2, '0');
@@ -1994,7 +2015,7 @@
                     };
                     
                     logUpdates["deletedLogsDatabase/" + logId] = delLog;
-                    updates["savedShipments/" + awb] = null; // deletes from firebase
+                    updates["savedShipments/" + awb] = null; 
                     
                     deletedLogsDatabase[logId] = delLog;
                     delete savedShipments[awb];
