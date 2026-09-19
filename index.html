@@ -1016,11 +1016,13 @@
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
                     let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
                     
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+
                     let rowHtml = `<tr>
                         <td>${s.slNo || '-'}</td>
                         <td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
                         <td style="font-weight:bold;">${s.awb || '-'}</td>
-                        <td>${s.bldNo || '-'}</td>
+                        <td>${displayBld}</td>
                         <td>${s.manifestId || '-'}</td>
                         <td>${s.cancelDate || '-'}</td>
                         <td>${s.rtoDate || '-'}</td>
@@ -1028,7 +1030,7 @@
                         <td style="${receivingStyle}">${receivingStatusText}</td>
                     </tr>`;
 
-                    let mMatchBld = safeInc(s.bldNo, mkBld) || safeInc(s.makerBldg, mkBld);
+                    let mMatchBld = safeInc(displayBld, mkBld);
                     let mMatchAwb = safeInc(s.awb, mkAwb);
                     let mMatchRef = safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
@@ -1040,7 +1042,7 @@
 
                     if (mMatchBld && mMatchAwb && mMatchRef && mMatchRto && mMatchStatus) htmlBuffer += rowHtml;
 
-                    let amMatchBld = safeInc(s.bldNo, amBld) || safeInc(s.makerBldg, amBld);
+                    let amMatchBld = safeInc(displayBld, amBld);
                     let amMatchAwb = safeInc(s.awb, amAwb);
                     let amMatchRef = safeInc(s.refNumber, amRef);
                     let amMatchRto = isDateInRange(s.rtoDate, amRtoFrom, amRtoTo);
@@ -1228,11 +1230,13 @@
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
                     let receivingStatusText = s.receivingStatus || "-";
                     let receivingStyle = isReceived ? "color: green; font-weight: bold;" : "";
+                    
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
 
                     let rowHTML = `<tr>
                         <td>${s.slNo || '-'}</td>
                         <td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
-                        <td>${s.bldNo || '-'}</td>
+                        <td>${displayBld}</td>
                         <td style="font-weight:bold;">${s.awb || '-'}</td>
                         <td>${s.manifestId || '-'}</td>
                         <td>${s.channel || '-'}</td>
@@ -1253,7 +1257,7 @@
                     }
 
                     if (s.status === "CLOSED" || s.status === "EXCESS" || s.isModified) {
-                        let acMatchBld = safeInc(s.bldNo, acBld) || safeInc(s.makerBldg, acBld);
+                        let acMatchBld = safeInc(displayBld, acBld);
                         let acMatchAwb = safeInc(s.awb, acAwb);
                         let acMatchRef = safeInc(s.refNumber, acRef);
                         let acMatchRto = isDateInRange(s.rtoDate, acRtoFrom, acRtoTo);
@@ -1323,10 +1327,11 @@
                 let dateToUse = s.uploadDate || s.cancelDate || '-';
                 if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
                 if (!s.refNumber || s.refNumber === '-') return; 
-                if (!safeInc(s.bldNo, bldFilter) && !safeInc(s.makerBldg, bldFilter)) return;
+                
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                if (!safeInc(displayBld, bldFilter)) return;
 
-                let bldNo = s.bldNo || '-';
-                let key = dateToUse + "|||" + s.refNumber + "|||" + bldNo;
+                let key = dateToUse + "|||" + s.refNumber + "|||" + displayBld;
                 if(!grouped[key]) grouped[key] = [];
                 grouped[key].push(awb);
             });
@@ -1377,7 +1382,9 @@
 
                 return dataArr.filter(s => {
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
-                    let mMatchBld = safeInc(s.bldNo, mkBld) || safeInc(s.makerBldg, mkBld);
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+                    
+                    let mMatchBld = safeInc(displayBld, mkBld);
                     let mMatchAwb = safeInc(s.awb, mkAwb);
                     let mMatchRef = safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
@@ -1404,9 +1411,10 @@
                 let err = (s.errSel || s.errTxt || '').replace(/"/g, '""'); 
                 let remarks = (s.remarks || '').replace(/"/g, '""');
                 let receivingStatus = (s.receivingStatus || '-').replace(/"/g, '""');
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
 
                 let row = [
-                    s.slNo || '-', s.refNumber || '-', s.bldNo || '-', s.awb || '-', s.manifestId || '-', s.channel || '-',
+                    s.slNo || '-', s.refNumber || '-', displayBld, s.awb || '-', s.manifestId || '-', s.channel || '-',
                     s.transporter || '-', s.channelOrder || '-', s.manifestDate || '-', s.cancelDate || '-',
                     err || '-', remarks || '-', s.rtoDate || '-', s.status || '-', s.ageing || '-', receivingStatus
                 ];
@@ -1432,9 +1440,10 @@
             data.forEach(s => {
                 let statusColor = (s.status === "CLOSED" || s.status === "EXCESS") ? "green" : "#d63031";
                 let recColor = (s.receivingStatus && String(s.receivingStatus).includes("RECEIVED")) ? "green" : "#000";
+                let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
                 html += `<tr>
                     <td>${s.slNo || '-'}</td><td style="font-weight:bold; color: #8e44ad;">${s.refNumber || '-'}</td>
-                    <td>${s.bldNo || '-'}</td><td style="font-weight:bold;">${s.awb}</td>
+                    <td>${displayBld}</td><td style="font-weight:bold;">${s.awb}</td>
                     <td>${s.manifestId || '-'}</td><td>${s.channel || '-'}</td><td>${s.transporter || '-'}</td>
                     <td>${s.channelOrder || '-'}</td><td>${s.manifestDate || '-'}</td><td>${s.cancelDate || '-'}</td>
                     <td>${s.errSel || s.errTxt || '-'}</td><td>${s.remarks || '-'}</td><td>${s.rtoDate || '-'}</td>
@@ -1701,7 +1710,8 @@
             if (!data) return;
 
             document.getElementById('admin-edit-awb-title').textContent = awb;
-            document.getElementById('admin-edit-bld').value = data.bldNo || '';
+            let displayBld = (data.bldNo && data.bldNo !== '-') ? data.bldNo : (data.makerBldg || '');
+            document.getElementById('admin-edit-bld').value = displayBld;
             document.getElementById('admin-edit-manifest').value = data.manifestId || '';
             document.getElementById('admin-edit-cancel').value = toHtmlDate(data.cancelDate);
             
@@ -1804,6 +1814,8 @@
 
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
 
+                    let displayBld = (s.bldNo && s.bldNo !== '-') ? s.bldNo : (s.makerBldg || '-');
+
                     let mMatchAwb = safeInc(awb, filterAwb);
                     let mMatchRef = safeInc(s.refNumber, filterRef);
                     let mMatchCancel = isDateInRange(s.cancelDate, filterCancelFrom, filterCancelTo);
@@ -1816,7 +1828,6 @@
                     else if (filterStatus === 'RTO_RECEIVED') mMatchStatus = isReceived;
 
                     if (mMatchAwb && mMatchRef && mMatchCancel && mMatchRto && mMatchStatus) {
-                        let bldNo = s.bldNo || '-';
                         let refNo = s.refNumber || '-';
                         let cancelDate = s.cancelDate || '-';
                         let rtoDate = s.rtoDate || '-';
@@ -1827,7 +1838,7 @@
                             <td><input type="checkbox" class="admin-del-check" value="${awb}"></td>
                             <td style="font-weight:bold; color: #8e44ad;">${refNo}</td>
                             <td style="font-weight:bold;">${awb}</td>
-                            <td>${bldNo}</td>
+                            <td>${displayBld}</td>
                             <td>${cancelDate}</td>
                             <td>${rtoDate}</td>
                             <td style="color:${statusColor}; font-weight:bold;">${status}</td>
