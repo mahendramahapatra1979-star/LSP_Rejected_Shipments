@@ -368,6 +368,8 @@
             
             <div class="admin-nav">
                 <button id="tab-btn-core" class="active" onclick="switchAdminTab('core')">⚙️ Admin Section</button>
+                <button id="tab-btn-maker" onclick="switchAdminTab('maker')">📝 Maker Section</button>
+                <button id="tab-btn-checker" onclick="switchAdminTab('checker')">✅ Checker Section</button>
             </div>
 
             <div id="admin-core-section" class="admin-tab-content active">
@@ -735,7 +737,19 @@
             if (!val || val === '-') return false;
             let cleanVal = String(val).toUpperCase().replace(/[^A-Z0-9]/g, '');
             let cleanFilter = String(filter).toUpperCase().replace(/[^A-Z0-9]/g, '');
-            return cleanVal.includes(cleanFilter);
+            
+            if (cleanVal.includes(cleanFilter)) return true;
+            
+            if (cleanFilter.includes('BLDG')) {
+                let altFilter = cleanFilter.replace('BLDG', 'BLD');
+                if (cleanVal.includes(altFilter)) return true;
+            }
+            if (cleanFilter.includes('BLD')) {
+                let altFilter = cleanFilter.replace('BLD', 'BLDG');
+                if (cleanVal.includes(altFilter)) return true;
+            }
+            
+            return false;
         };
 
         function parseCSVRow(text, delimiter = ',') {
@@ -1014,7 +1028,7 @@
                         <td style="${receivingStyle}">${receivingStatusText}</td>
                     </tr>`;
 
-                    let mMatchBld = safeInc(s.bldNo, mkBld);
+                    let mMatchBld = safeInc(s.bldNo, mkBld) || safeInc(s.makerBldg, mkBld);
                     let mMatchAwb = safeInc(s.awb, mkAwb);
                     let mMatchRef = safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
@@ -1026,7 +1040,7 @@
 
                     if (mMatchBld && mMatchAwb && mMatchRef && mMatchRto && mMatchStatus) htmlBuffer += rowHtml;
 
-                    let amMatchBld = safeInc(s.bldNo, amBld);
+                    let amMatchBld = safeInc(s.bldNo, amBld) || safeInc(s.makerBldg, amBld);
                     let amMatchAwb = safeInc(s.awb, amAwb);
                     let amMatchRef = safeInc(s.refNumber, amRef);
                     let amMatchRto = isDateInRange(s.rtoDate, amRtoFrom, amRtoTo);
@@ -1136,6 +1150,7 @@
                     slNo: serialCounter++,
                     refNumber: checkerActiveRef,
                     bldNo: row.bld || sessionBldg || '-',
+                    makerBldg: sessionBldg || '-',
                     manifestId: row.manifest || '-',
                     channel: row.channel || '-',
                     transporter: row.transporter || '-',
@@ -1238,7 +1253,7 @@
                     }
 
                     if (s.status === "CLOSED" || s.status === "EXCESS" || s.isModified) {
-                        let acMatchBld = safeInc(s.bldNo, acBld);
+                        let acMatchBld = safeInc(s.bldNo, acBld) || safeInc(s.makerBldg, acBld);
                         let acMatchAwb = safeInc(s.awb, acAwb);
                         let acMatchRef = safeInc(s.refNumber, acRef);
                         let acMatchRto = isDateInRange(s.rtoDate, acRtoFrom, acRtoTo);
@@ -1308,7 +1323,7 @@
                 let dateToUse = s.uploadDate || s.cancelDate || '-';
                 if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
                 if (!s.refNumber || s.refNumber === '-') return; 
-                if (!safeInc(s.bldNo, bldFilter)) return;
+                if (!safeInc(s.bldNo, bldFilter) && !safeInc(s.makerBldg, bldFilter)) return;
 
                 let bldNo = s.bldNo || '-';
                 let key = dateToUse + "|||" + s.refNumber + "|||" + bldNo;
@@ -1362,7 +1377,7 @@
 
                 return dataArr.filter(s => {
                     let isReceived = (s.receivingStatus && typeof s.receivingStatus === 'string' && s.receivingStatus.includes("RECEIVED"));
-                    let mMatchBld = safeInc(s.bldNo, mkBld);
+                    let mMatchBld = safeInc(s.bldNo, mkBld) || safeInc(s.makerBldg, mkBld);
                     let mMatchAwb = safeInc(s.awb, mkAwb);
                     let mMatchRef = safeInc(s.refNumber, mkRef);
                     let mMatchRto = isDateInRange(s.rtoDate, mkRtoFrom, mkRtoTo);
@@ -1503,7 +1518,7 @@
                         let uploadedAWBs = [];
 
                         recalculateSerialNumbers(); 
-                        let sessionBldg = sessionStorage.getItem("savedBldg");
+                        let sessionBldg = sessionStorage.getItem("savedBldg") || "ALL";
 
                         let todayDate = new Date();
                         let dd = String(todayDate.getDate()).padStart(2, '0');
@@ -1568,6 +1583,7 @@
                                     slNo: serialCounter++,
                                     refNumber: tentativeNewRefNumber,
                                     bldNo: bldToSave,
+                                    makerBldg: sessionBldg,
                                     manifestId: manToSave,
                                     channel: chanToSave,
                                     transporter: transToSave,
@@ -1598,6 +1614,7 @@
                                 if(bulkCancelDate) existing.cancelDate = bulkCancelDate;
                                 
                                 existing.bldNo = bldToSave;
+                                existing.makerBldg = sessionBldg;
                                 existing.manifestId = manToSave;
                                 existing.channel = chanToSave;
                                 existing.transporter = transToSave;
@@ -1677,182 +1694,6 @@
                 }
             }
             window.pendingEmailData = null;
-        };
-
-        window.processManifestUpload = function(btnElement) {
-            let fileInput = document.getElementById('csv-upload');
-            let file = fileInput.files[0];
-            if (!file) {
-                alert("PLEASE SELECT A CSV FILE FIRST!");
-                return;
-            }
-            
-            let btn = btnElement; 
-            if(!btn || !btn.innerText) btn = document.querySelector('button[onclick*="processManifestUpload"]');
-            
-            let ogText = btn ? btn.innerText : "UPLOAD";
-            if (btn) {
-                btn.innerText = "⏳ UPLOADING...";
-                btn.disabled = true;
-            }
-            
-            let reader = new FileReader();
-            reader.onload = function(event) {
-                setTimeout(() => {
-                    try {
-                        let lines = event.target.result.split(/\r?\n/).filter(line => line.trim() !== '');
-                        
-                        let headersFound = false;
-                        let headerRowIndex = -1;
-
-                        mappings = { awb: -1, bld: -1, manifest: -1, channel: -1, order: -1, transporter: -1, date: -1 };
-                        let delim = (lines[0] && (lines[0].includes('\t') || lines[0].includes(';'))) ? (lines[0].includes('\t') ? '\t' : ';') : ',';
-
-                        for (let rIdx = 0; rIdx < Math.min(30, lines.length); rIdx++) {
-                            let cols = parseCSVRow(lines[rIdx], delim).map(c => c.trim().toLowerCase());
-                            
-                            if (cols.some(c => c.includes('awb') || c.includes('waybill') || c.includes('tracking'))) {
-                                headersFound = true;
-                                headerRowIndex = rIdx;
-                                
-                                cols.forEach((col, cIdx) => {
-                                    let cleanCol = col.trim();
-                                    if (cleanCol === 'awb number' || cleanCol === 'awb' || cleanCol === 'tracking number' || cleanCol === 'waybill') mappings.awb = cIdx;
-                                    else if (cleanCol === 'fulfillment location name' || cleanCol === 'bld no' || cleanCol === 'facility') mappings.bld = cIdx;
-                                    else if (cleanCol === 'manifest id' || cleanCol === 'manifest_id') mappings.manifest = cIdx; 
-                                    else if (cleanCol === 'channel order id' || cleanCol === 'order id' || cleanCol === 'order_id') mappings.order = cIdx;
-                                    else if (cleanCol === 'sales channel' || cleanCol === 'channel' || cleanCol === 'channel name') mappings.channel = cIdx;
-                                    else if (cleanCol.includes('transporter') || cleanCol.includes('courier') || cleanCol.includes('lsp')) mappings.transporter = cIdx;
-                                    else if (cleanCol.includes('date') || cleanCol.includes('time') || cleanCol.includes('created')) mappings.date = cIdx;
-                                });
-                                break; 
-                            }
-                        }
-
-                        if (!headersFound || mappings.awb === -1) {
-                            alert("UPLOAD FAILED! Could not find 'AWB' column header in the first 30 rows.");
-                            return;
-                        }
-
-                        let newCount = 0;
-                        let startIndex = headerRowIndex + 1;
-                        let updates = {};
-
-                        for(let i = startIndex; i < lines.length; i++) {
-                            let rowVals = parseCSVRow(lines[i], delim);
-                            let getVal = (idx) => { return (idx >= 0 && idx < rowVals.length && rowVals[idx]) ? String(rowVals[idx]).trim().toUpperCase() : '-'; };
-
-                            let rawAwb = getVal(mappings.awb);
-                            let rowAwb = rawAwb.replace(/[\.\#\$\/\[\]]/g, '').trim(); 
-
-                            if(rowAwb !== '-' && rowAwb !== '' && !rowAwb.includes('AWB') && !rowAwb.includes('NUMBER')) {
-                                manifestDatabase[rowAwb] = {
-                                    bld: getVal(mappings.bld),
-                                    manifest: getVal(mappings.manifest),
-                                    channel: getVal(mappings.channel),
-                                    transporter: getVal(mappings.transporter),
-                                    order: getVal(mappings.order),
-                                    date: normalizeDateToDDMMYYYY(getVal(mappings.date))
-                                };
-                                updates[rowAwb] = manifestDatabase[rowAwb];
-                                newCount++;
-                            }
-                        }
-                        
-                        db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").update(updates);
-                        saveLocalOnly(); 
-                        
-                        document.getElementById('manifest-db-count').innerText = Object.keys(manifestDatabase).length;
-                        
-                        if (newCount > 0) {
-                            alert("UPLOAD COMPLETED! " + newCount + " RECORDS ADDED TO DATABASE.");
-                        } else {
-                            alert("WARNING: 0 Records added. Please ensure the CSV contains data.");
-                        }
-                        
-                        fileInput.value = ''; 
-                    } catch (error) {
-                        console.error("CSV Parse Error: ", error);
-                        alert("UPLOAD FAILED! ERROR: " + error.message);
-                    } finally {
-                        if (btn) {
-                            btn.innerText = ogText;
-                            btn.disabled = false;
-                        }
-                    }
-                }, 50);
-            };
-            reader.readAsText(file);
-        };
-
-        window.toggleAllAdminCheckboxes = function(source) {
-            let checkboxes = document.querySelectorAll('.admin-del-check');
-            checkboxes.forEach(cb => {
-                cb.checked = source.checked;
-            });
-        };
-
-        window.promptAdminDelete = function() {
-            let checkboxes = document.querySelectorAll('.admin-del-check:checked');
-            if (checkboxes.length === 0) {
-                alert("PLEASE SELECT AT LEAST ONE ENTRY TO DELETE!");
-                return;
-            }
-            document.getElementById('custom-confirm-modal').style.display = 'flex';
-        };
-
-        window.closeConfirmModal = function() {
-            document.getElementById('custom-confirm-modal').style.display = 'none';
-        };
-
-        window.executeBulkDelete = function() {
-            let checkboxes = document.querySelectorAll('.admin-del-check:checked');
-            let updates = {};
-            let count = 0;
-            
-            let today = new Date();
-            let removedDateStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
-
-            checkboxes.forEach(cb => {
-                let awb = cb.value;
-                if(savedShipments[awb]) {
-                    let s = savedShipments[awb];
-                    let logId = "LOG_" + new Date().getTime() + "_" + Math.random().toString(36).substr(2, 5);
-                    
-                    deletedLogsDatabase[logId] = {
-                        refNumber: s.refNumber || "-",
-                        refDate: s.uploadDate || "-",
-                        awb: awb,
-                        removedDate: removedDateStr
-                    };
-                    updates["deletedLogsDatabase/" + logId] = deletedLogsDatabase[logId];
-
-                    delete savedShipments[awb];
-                    updates["savedShipments/" + awb] = null; 
-                    count++;
-                }
-            });
-
-            if(count === 0) {
-                alert("NO ENTRIES SELECTED!");
-                closeConfirmModal();
-                return;
-            }
-
-            recalculateSerialNumbers(); 
-            syncMultipleShipments(updates);
-            
-            alert(`${count} ENTRIES HAVE BEEN DELETED SUCCESSFULLY!`);
-            
-            updateDataTable();
-            if(typeof updateCheckerTable === 'function') updateCheckerTable();
-            if(typeof renderAdminShipmentsTable === 'function') renderAdminShipmentsTable();
-            if(typeof renderDeletedLogsTable === 'function') renderDeletedLogsTable();
-            
-            let selectAllBox = document.getElementById('admin-select-all');
-            if(selectAllBox) selectAllBox.checked = false;
-            
-            closeConfirmModal();
         };
 
         window.loadAdminEditForm = function(awb) {
