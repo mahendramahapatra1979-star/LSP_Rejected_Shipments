@@ -74,6 +74,7 @@
         .data-table tr:hover { background-color: #eef5f9; }
         
         .auto-field input { background-color: #f1f2f6; color: #4e565c; cursor: not-allowed; font-weight: bold; }
+        .helper-text { font-size: 9px; color: #888; display: block; text-transform: none; margin-top: 2px; }
         
         .badge-role { display: inline-block; padding: 4px 10px; background-color: #2c3e50; color: #fff; border-radius: 4px; font-size: 11px; font-weight: bold; }
         .user-highlight { color: #f1c40f; }
@@ -123,7 +124,10 @@
                 <button onclick="closeReportModal()" style="background:#d63031; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">X</button>
             </div>
             <div style="display: flex; gap: 10px; margin-bottom: 15px; align-items: center;">
-                <label style="font-weight:bold; font-size:12px;">DATE RANGE:</label>
+                <label style="font-weight:bold; font-size:12px;">BLD FILTER:</label>
+                <input type="text" id="report-bld-filter" placeholder="BLD NO" style="padding: 5px; border: 1px solid #ccd1d9; border-radius: 4px; font-size: 12px; width: 120px; text-transform: uppercase;" oninput="generateReport()">
+                
+                <label style="font-weight:bold; font-size:12px; margin-left: 10px;">DATE RANGE:</label>
                 <div class="date-range-container">
                     <input type="date" id="report-date-from" onchange="generateReport()">
                     <span style="font-size:12px; font-weight:bold; padding-top:4px;">TO</span>
@@ -137,6 +141,7 @@
                         <tr>
                             <th style="width: 100px;">UPLOAD DATE</th>
                             <th style="width: 150px;">REFERENCE NUMBER</th>
+                            <th style="width: 150px;">BLD NO</th>
                             <th style="width: 80px;">TOTAL QTY</th>
                             <th>TRACKING IDs (AWBs)</th>
                         </tr>
@@ -530,6 +535,24 @@
                             </div>
                         </div>
 
+                        <!-- DELETED RECORDS LOG -->
+                        <div class="section-box">
+                            <h3 style="border-bottom: 2px solid #8ec5fc; padding-bottom: 4px; margin-bottom: 10px; color: #d63031;">DELETED RECORDS LOG</h3>
+                            <div class="table-container" style="max-height: 200px;">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>REF NO</th>
+                                            <th>REF DATE</th>
+                                            <th>AWB NO</th>
+                                            <th>REMOVED DATE</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="admin-deleted-logs-body"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -692,7 +715,9 @@
         const safeInc = (val, filter) => {
             if (!filter) return true;
             if (!val || val === '-') return false;
-            return String(val).toUpperCase().includes(String(filter).toUpperCase());
+            let cleanVal = String(val).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            let cleanFilter = String(filter).toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return cleanVal.includes(cleanFilter);
         };
 
         function parseCSVRow(text, delimiter = ',') {
@@ -734,8 +759,10 @@
 
         let manifestDatabase = {}; 
         let savedShipments = {}; 
+        let deletedLogsDatabase = {}; 
         let serialCounter = 1;
         let globalRefCounter = 1; 
+        let lastRefYear = new Date().getFullYear();
         let adminEmails = "";
 
         let loggedInRole = "MAKER"; 
@@ -749,22 +776,6 @@
 
         let usersDatabase = { "ADMIN": { role: "ADMIN", password: "123", sessionToken: "", bldg: "ALL" } };
         window.pendingEmailData = null; 
-
-        function normalizeDateToDDMMYYYY(dateStr) {
-            if (!dateStr || dateStr === '-') return '-';
-            dateStr = dateStr.split(' ')[0]; 
-            if (dateStr.includes('-')) {
-                let parts = dateStr.split('-');
-                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`; 
-                return dateStr; 
-            }
-            if (dateStr.includes('/')) {
-                let parts = dateStr.split('/');
-                if (parts[0].length === 4) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                return `${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}-${parts[2]}`; 
-            }
-            return dateStr;
-        }
 
         function enforceAdminUser() {
             let dbChanged = false;
@@ -787,8 +798,10 @@
                 localStorage.setItem("lsp_manifestDatabase", JSON.stringify(manifestDatabase));
                 localStorage.setItem("lsp_savedShipments", JSON.stringify(savedShipments));
                 localStorage.setItem("lsp_usersDatabase", JSON.stringify(usersDatabase));
+                localStorage.setItem("lsp_deletedLogs", JSON.stringify(deletedLogsDatabase));
                 localStorage.setItem("lsp_serialCounter", serialCounter);
                 localStorage.setItem("lsp_globalRefCounter", globalRefCounter);
+                localStorage.setItem("lsp_lastRefYear", lastRefYear);
                 localStorage.setItem("lsp_adminEmails", adminEmails);
                 localStorage.setItem("lsp_deviceErrors", JSON.stringify(deviceErrors));
                 localStorage.setItem("lsp_remarksOptions", JSON.stringify(remarksOptions));
@@ -813,6 +826,7 @@
             if (!isFirebaseLoaded) return;
             updates["serialCounter"] = serialCounter;
             updates["globalRefCounter"] = globalRefCounter;
+            updates["lastRefYear"] = lastRefYear;
             let cleanUpdates = JSON.parse(JSON.stringify(updates));
             db.ref("LSP_REJECTED_SHIPMENT_TRACKER").update(cleanUpdates).catch(e => alert("⚠️ Bulk Upload Failed: " + e.message));
         }
@@ -841,11 +855,17 @@
                     }
                 }
 
+                let storedLogs = localStorage.getItem("lsp_deletedLogs");
+                if (storedLogs) deletedLogsDatabase = JSON.parse(storedLogs);
+
                 let storedCounter = localStorage.getItem("lsp_serialCounter");
                 if (storedCounter) serialCounter = parseInt(storedCounter);
 
                 let storedRefCounter = localStorage.getItem("lsp_globalRefCounter");
                 if (storedRefCounter) globalRefCounter = parseInt(storedRefCounter);
+                
+                let storedRefYear = localStorage.getItem("lsp_lastRefYear");
+                if (storedRefYear) lastRefYear = parseInt(storedRefYear);
 
                 let storedEmails = localStorage.getItem("lsp_adminEmails");
                 if (storedEmails) adminEmails = storedEmails;
@@ -870,6 +890,7 @@
                 document.getElementById('admin-target-emails').value = adminEmails;
                 renderAdminUsersTable();
                 renderAdminDropdownManager();
+                renderDeletedLogsTable();
             }
         };
 
@@ -1247,6 +1268,7 @@
             let ymd = `${yyyy}-${mm}-${dd}`;
             document.getElementById('report-date-from').value = ymd;
             document.getElementById('report-date-to').value = ymd;
+            document.getElementById('report-bld-filter').value = '';
             generateReport();
             document.getElementById('report-modal').style.display = 'flex';
         };
@@ -1258,6 +1280,8 @@
         window.generateReport = function() {
             let fromVal = document.getElementById('report-date-from').value;
             let toVal = document.getElementById('report-date-to').value;
+            let bldFilter = document.getElementById('report-bld-filter').value.trim();
+            
             let tbody = document.getElementById('report-modal-body');
             let grouped = {};
             
@@ -1266,8 +1290,10 @@
                 let dateToUse = s.uploadDate || s.cancelDate || '-';
                 if (!isDateInRange(dateToUse, fromVal, toVal)) return; 
                 if (!s.refNumber || s.refNumber === '-') return; 
+                if (!safeInc(s.bldNo, bldFilter)) return;
 
-                let key = dateToUse + "|||" + s.refNumber;
+                let bldNo = s.bldNo || '-';
+                let key = dateToUse + "|||" + s.refNumber + "|||" + bldNo;
                 if(!grouped[key]) grouped[key] = [];
                 grouped[key].push(awb);
             });
@@ -1276,17 +1302,19 @@
             let keys = Object.keys(grouped);
             
             if(keys.length === 0) {
-                html = `<tr><td colspan="4" style="text-align:center; padding: 20px;">No references generated in this date range.</td></tr>`;
+                html = `<tr><td colspan="5" style="text-align:center; padding: 20px;">No references generated in this date range for the selected building.</td></tr>`;
             } else {
                 keys.forEach(k => {
                     let parts = k.split("|||");
                     let dateStr = parts[0];
                     let refStr = parts[1];
+                    let bldStr = parts[2];
                     let awbs = grouped[k];
                     
                     html += `<tr>
                         <td style="font-weight:bold;">${dateStr}</td>
                         <td style="font-weight:bold; color:#8e44ad;">${refStr}</td>
+                        <td style="font-weight:bold;">${bldStr}</td>
                         <td style="font-weight:bold; font-size:12px;">${awbs.length}</td>
                         <td style="text-align:left; word-break: break-all; white-space: normal;">${awbs.join(", ")}</td>
                     </tr>`;
@@ -1463,8 +1491,13 @@
                         let dd = String(todayDate.getDate()).padStart(2, '0');
                         let mm = String(todayDate.getMonth() + 1).padStart(2, '0');
                         let currentYear = todayDate.getFullYear();
-                        let formattedToday = `${dd}-${mm}-${currentYear}`;
+                        
+                        if (lastRefYear !== currentYear) {
+                            globalRefCounter = 0; 
+                            lastRefYear = currentYear;
+                        }
 
+                        let formattedToday = `${dd}-${mm}-${currentYear}`;
                         let hasSuccess = false;
                         let tentativeNewRefNumber = `RTO/${currentYear}/${String(globalRefCounter + 1).padStart(6, '0')}`;
 
@@ -1487,9 +1520,20 @@
                                 continue;
                             }
 
-                            let row = manifestDatabase[bulkAwb] || { bld: '-', manifest: '-', channel: '-', transporter: '-', order: '-', date: '-' };
-
+                            let row = manifestDatabase[bulkAwb];
                             let existing = savedShipments[bulkAwb];
+
+                            let bldToSave = (row && row.bld && row.bld !== '-') ? row.bld : (existing ? existing.bldNo : '-');
+                            let manToSave = (row && row.manifest && row.manifest !== '-') ? row.manifest : (existing ? existing.manifestId : '-');
+                            let chanToSave = (row && row.channel && row.channel !== '-') ? row.channel : (existing ? existing.channel : '-');
+                            let transToSave = (row && row.transporter && row.transporter !== '-') ? row.transporter : (existing ? existing.transporter : '-');
+                            let ordToSave = (row && row.order && row.order !== '-') ? row.order : (existing ? existing.channelOrder : '-');
+                            let dateToSave = (row && row.date && row.date !== '-') ? row.date : (existing ? existing.manifestDate : '-');
+
+                            if (bldToSave === '-' || manToSave === '-' || chanToSave === '-' || transToSave === '-' || ordToSave === '-' || dateToSave === '-') {
+                                errorMsgs.push(`AWB ${bulkAwb}: Mandatory Manifest details missing. Please upload full Manifest first.`);
+                                continue;
+                            }
 
                             let cancelDateObj = parseDateDDMMYYYY(bulkCancelDate || (existing ? existing.cancelDate : ""));
                             let rtoDateObj = parseDateDDMMYYYY(bulkRto);
@@ -1505,12 +1549,12 @@
                                 savedShipments[bulkAwb] = {
                                     slNo: serialCounter++,
                                     refNumber: tentativeNewRefNumber,
-                                    bldNo: row.bld,
-                                    manifestId: row.manifest,
-                                    channel: row.channel,
-                                    transporter: row.transporter,
-                                    channelOrder: row.order,
-                                    manifestDate: row.date,
+                                    bldNo: bldToSave,
+                                    manifestId: manToSave,
+                                    channel: chanToSave,
+                                    transporter: transToSave,
+                                    channelOrder: ordToSave,
+                                    manifestDate: dateToSave,
                                     errSel: "", 
                                     errTxt: bulkErr || "-", 
                                     cancelDate: bulkCancelDate || "-",
@@ -1535,12 +1579,12 @@
                                 if(bulkErr) existing.errTxt = bulkErr;
                                 if(bulkCancelDate) existing.cancelDate = bulkCancelDate;
                                 
-                                existing.bldNo = existing.bldNo !== '-' ? existing.bldNo : row.bld;
-                                existing.manifestId = existing.manifestId !== '-' ? existing.manifestId : row.manifest;
-                                existing.channel = existing.channel !== '-' ? existing.channel : row.channel;
-                                existing.transporter = existing.transporter !== '-' ? existing.transporter : row.transporter;
-                                existing.channelOrder = existing.channelOrder !== '-' ? existing.channelOrder : row.order;
-                                existing.manifestDate = existing.manifestDate !== '-' ? existing.manifestDate : row.date;
+                                existing.bldNo = bldToSave;
+                                existing.manifestId = manToSave;
+                                existing.channel = chanToSave;
+                                existing.transporter = transToSave;
+                                existing.channelOrder = ordToSave;
+                                existing.manifestDate = dateToSave;
 
                                 existing.refNumber = tentativeNewRefNumber; 
                                 existing.remarks = bulkRem || existing.remarks || "-";
@@ -1747,9 +1791,24 @@
             let checkboxes = document.querySelectorAll('.admin-del-check:checked');
             let updates = {};
             let count = 0;
+            
+            let today = new Date();
+            let removedDateStr = `${String(today.getDate()).padStart(2, '0')}-${String(today.getMonth() + 1).padStart(2, '0')}-${today.getFullYear()}`;
+
             checkboxes.forEach(cb => {
                 let awb = cb.value;
                 if(savedShipments[awb]) {
+                    let s = savedShipments[awb];
+                    let logId = "LOG_" + new Date().getTime() + "_" + Math.random().toString(36).substr(2, 5);
+                    
+                    deletedLogsDatabase[logId] = {
+                        refNumber: s.refNumber || "-",
+                        refDate: s.uploadDate || "-",
+                        awb: awb,
+                        removedDate: removedDateStr
+                    };
+                    updates["deletedLogsDatabase/" + logId] = deletedLogsDatabase[logId];
+
                     delete savedShipments[awb];
                     updates["savedShipments/" + awb] = null; 
                     count++;
@@ -1770,6 +1829,7 @@
             updateDataTable();
             if(typeof updateCheckerTable === 'function') updateCheckerTable();
             if(typeof renderAdminShipmentsTable === 'function') renderAdminShipmentsTable();
+            if(typeof renderDeletedLogsTable === 'function') renderDeletedLogsTable();
             
             let selectAllBox = document.getElementById('admin-select-all');
             if(selectAllBox) selectAllBox.checked = false;
@@ -1924,6 +1984,34 @@
             } catch(e) { console.error("Error in renderAdminShipmentsTable:", e); }
         };
 
+        window.renderDeletedLogsTable = function() {
+            try {
+                let tbody = document.getElementById('admin-deleted-logs-body');
+                if(!tbody) return;
+                
+                let keys = Object.keys(deletedLogsDatabase);
+                keys.sort((a,b) => {
+                    let timeA = parseInt(a.split('_')[1]) || 0;
+                    let timeB = parseInt(b.split('_')[1]) || 0;
+                    return timeB - timeA;
+                });
+
+                let htmlBuffer = "";
+                keys.forEach(k => {
+                    let log = deletedLogsDatabase[k];
+                    htmlBuffer += `<tr>
+                        <td style="font-weight:bold; color: #8e44ad;">${log.refNumber}</td>
+                        <td>${log.refDate}</td>
+                        <td style="font-weight:bold;">${log.awb}</td>
+                        <td style="color: #d63031; font-weight:bold;">${log.removedDate}</td>
+                    </tr>`;
+                });
+                tbody.innerHTML = htmlBuffer;
+            } catch (e) {
+                console.error("Render Deleted Logs Error: ", e);
+            }
+        };
+
         window.renderAdminUsersTable = function() {
             try {
                 let tbody = document.getElementById('admin-users-body');
@@ -1961,6 +2049,7 @@
         window.adminAddNewUser = function() {
             try {
                 enforceAdminUser();
+
                 let newUsername = document.getElementById('admin-new-username').value.trim().toUpperCase();
                 let newRole = document.getElementById('admin-new-role').value;
                 let newBldg = document.getElementById('admin-new-bldg').value;
@@ -2156,6 +2245,7 @@
                 renderAdminShipmentsTable();
                 renderAdminDropdownManager();
                 renderAdminUsersTable();
+                renderDeletedLogsTable();
                 updateDataTable(); 
                 switchAdminTab('core'); 
             } else if (loggedInRole === "CHECKER") {
@@ -2207,6 +2297,7 @@
                     manifestDatabase = data.manifestDatabase || {};
                     savedShipments = data.savedShipments || {};
                     usersDatabase = data.usersDatabase || usersDatabase;
+                    deletedLogsDatabase = data.deletedLogsDatabase || deletedLogsDatabase;
                     serialCounter = data.serialCounter || 1;
                     globalRefCounter = data.globalRefCounter || 1;
                     adminEmails = data.adminEmails || "";
@@ -2242,6 +2333,7 @@
                             renderAdminShipmentsTable();
                             renderAdminDropdownManager();
                             renderAdminUsersTable();
+                            renderDeletedLogsTable();
                         }
                     }
                 }
@@ -2317,12 +2409,26 @@
                 if (loggedInRole === "ADMIN") renderAdminUsersTable();
             });
 
+            baseRef.child("deletedLogsDatabase").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    deletedLogsDatabase = snapshot.val();
+                } else {
+                    deletedLogsDatabase = {};
+                }
+                saveLocalOnly();
+                if (loggedInRole === "ADMIN") renderDeletedLogsTable();
+            });
+
             baseRef.child("serialCounter").on('value', function(snapshot) {
                 if (snapshot.exists()) serialCounter = snapshot.val();
             });
 
             baseRef.child("globalRefCounter").on('value', function(snapshot) {
                 if (snapshot.exists()) globalRefCounter = snapshot.val();
+            });
+
+            baseRef.child("lastRefYear").on('value', function(snapshot) {
+                if (snapshot.exists()) lastRefYear = snapshot.val();
             });
 
             baseRef.child("adminEmails").on('value', function(snapshot) {
@@ -2375,6 +2481,8 @@
                 } else {
                     sessionStorage.clear(); 
                 }
+            } else {
+                populateDropdowns();
             }
         };
     </script>
