@@ -116,6 +116,21 @@
         </div>
     </div>
 
+    <!-- MAKER NOTIFICATIONS MODAL -->
+    <div id="maker-notification-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width: 95%; max-width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow:0 5px 15px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #8ec5fc; padding-bottom:10px; margin-bottom:15px;">
+                <h2 style="margin:0; font-size: 16px; color:#2c3e50;">🔔 MAKER NOTIFICATIONS</h2>
+                <button onclick="closeMakerNotificationModal()" style="background:#d63031; color:#fff; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-weight:bold;">X</button>
+            </div>
+            <div style="overflow-y: auto; flex-grow: 1; border: 1px solid #e1e8ed; border-radius: 4px; padding: 10px;" id="maker-notifications-body">
+            </div>
+            <div style="margin-top: 10px; text-align: right;">
+                <button onclick="clearMakerNotifications()" style="padding: 6px 12px; background: #e74c3c; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; font-size: 11px;">CLEAR ALL</button>
+            </div>
+        </div>
+    </div>
+
     <!-- REPORT MODAL -->
     <div id="report-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
         <div style="background:#fff; padding:20px; border-radius:8px; width: 95%; max-width: 900px; max-height: 85vh; display: flex; flex-direction: column; box-shadow:0 5px 15px rgba(0,0,0,0.3);">
@@ -200,6 +215,7 @@
                 <span style="margin: 0 5px;">|</span>
                 <span id="current-user-name" class="user-highlight">USER: ADMIN</span>
             </div>
+            <button id="maker-notif-btn" onclick="openMakerNotificationModal()" style="display:none; margin-left: 10px; padding: 4px 12px; font-size: 11px; background: linear-gradient(135deg, #f39c12 0%, #f1c40f 100%); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">🔔 NOTIFICATIONS <span id="maker-notif-badge" style="background:#d63031; color:white; padding:1px 5px; border-radius:8px; font-size:9px;">0</span></button>
             <button onclick="openReportModal()" style="margin-left: 10px; padding: 4px 12px; font-size: 11px; background: #8e44ad; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">📊 REPORTS</button>
             <button onclick="refreshAllData(this)" style="margin-left: 5px; padding: 4px 12px; font-size: 11px; background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">🔄 REFRESH</button>
             <button onclick="doLogout()" style="margin-left: 5px; padding: 4px 12px; font-size: 11px; background: linear-gradient(135deg, #d63031 0%, #ff7675 100%); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; height: 24px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.15);">LOGOUT</button>
@@ -215,7 +231,7 @@
             <span style="font-size: 10px; color: #555; display: block; margin-top: 5px;">Total Records in DB: <strong id="manifest-db-count">0</strong></span>
         </div>
 
-        <!-- MAKER VIEW -->
+        <!-- MAKER VIEW (Hidden until manifest is uploaded) -->
         <div id="maker-view-container" style="display: none;">
             <div class="main-layout" id="maker-layout-block">
                 <div class="form-side">
@@ -312,7 +328,7 @@
                     <div class="stat-card excess">EXCESS <span id="chk-excess">0</span></div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div>
                         <label style="font-size: 11px; font-weight: bold; color: #f39c12; margin-bottom: 4px; display: block;">PENDING AWBS:</label>
                         <div id="chk-pending-list" class="list-box"></div>
@@ -321,6 +337,10 @@
                         <label style="font-size: 11px; font-weight: bold; color: #d63031; margin-bottom: 4px; display: block;">EXCESS AWBS:</label>
                         <div id="chk-excess-list" class="list-box excess-box"></div>
                     </div>
+                </div>
+
+                <div style="text-align: center;">
+                    <button class="btn-save" onclick="completeCheckerBatch()" style="background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%); width: auto; padding: 10px 25px; font-size: 13px; font-weight: bold;">✅ COMPLETE QC & SUBMIT BATCH</button>
                 </div>
             </div>
 
@@ -805,6 +825,7 @@
         let manifestDatabase = {}; 
         let savedShipments = {}; 
         let deletedLogsDatabase = {}; 
+        let notificationsDatabase = {};
         let serialCounter = 1;
         let globalRefCounter = 1; 
         let lastRefYear = new Date().getFullYear();
@@ -844,6 +865,7 @@
                 localStorage.setItem("lsp_savedShipments", JSON.stringify(savedShipments));
                 localStorage.setItem("lsp_usersDatabase", JSON.stringify(usersDatabase));
                 localStorage.setItem("lsp_deletedLogs", JSON.stringify(deletedLogsDatabase));
+                localStorage.setItem("lsp_notificationsDatabase", JSON.stringify(notificationsDatabase));
                 localStorage.setItem("lsp_serialCounter", serialCounter);
                 localStorage.setItem("lsp_globalRefCounter", globalRefCounter);
                 localStorage.setItem("lsp_lastRefYear", lastRefYear);
@@ -903,6 +925,9 @@
                 let storedLogs = localStorage.getItem("lsp_deletedLogs");
                 if (storedLogs) deletedLogsDatabase = JSON.parse(storedLogs) || {};
 
+                let storedNotifs = localStorage.getItem("lsp_notificationsDatabase");
+                if (storedNotifs) notificationsDatabase = JSON.parse(storedNotifs) || {};
+
                 let storedCounter = localStorage.getItem("lsp_serialCounter");
                 if (storedCounter) serialCounter = parseInt(storedCounter) || 1;
 
@@ -925,6 +950,106 @@
             recalculateSerialNumbers();
         }
 
+        function updateMakerViewVisibility() {
+            let hasManifest = Object.keys(manifestDatabase || {}).length > 0;
+            let container = document.getElementById('maker-view-container');
+            if (container) {
+                if (loggedInRole === "MAKER") {
+                    container.style.display = hasManifest ? 'block' : 'none';
+                } else if (loggedInRole === "ADMIN") {
+                    container.style.display = 'none'; // Admin has admin layout
+                }
+            }
+        }
+
+        function addMakerNotification(header, refNum, details) {
+            let notifId = "NOTIF_" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+            let today = new Date();
+            let timeStr = today.toLocaleDateString() + " " + today.toLocaleTimeString();
+            notificationsDatabase[notifId] = {
+                header: header,
+                refNumber: refNum,
+                details: details,
+                time: timeStr,
+                read: false
+            };
+            saveLocalOnly();
+            if (isFirebaseLoaded) {
+                db.ref("LSP_REJECTED_SHIPMENT_TRACKER/notificationsDatabase/" + notifId).set(notificationsDatabase[notifId]);
+            }
+            updateMakerNotificationBadge();
+        }
+
+        function updateMakerNotificationBadge() {
+            let unreadCount = 0;
+            if (notificationsDatabase) {
+                Object.keys(notificationsDatabase).forEach(k => {
+                    if (notificationsDatabase[k] && !notificationsDatabase[k].read) {
+                        unreadCount++;
+                    }
+                });
+            }
+            let badge = document.getElementById('maker-notif-badge');
+            if (badge) badge.innerText = unreadCount;
+        }
+
+        window.openMakerNotificationModal = function() {
+            let body = document.getElementById('maker-notifications-body');
+            let html = "";
+            let keys = Object.keys(notificationsDatabase || {});
+            keys.sort((a, b) => {
+                let timeA = parseInt(a.split('_')[1]) || 0;
+                let timeB = parseInt(b.split('_')[1]) || 0;
+                return timeB - timeA;
+            });
+
+            if (keys.length === 0) {
+                html = `<div style="text-align:center; padding: 20px; color: #777;">No notifications available.</div>`;
+            } else {
+                keys.forEach(k => {
+                    let notif = notificationsDatabase[k];
+                    if (!notif) return;
+                    notif.read = true;
+                    let headerColor = "#2c3e50";
+                    if (notif.header === "Excess Sent") headerColor = "#d63031";
+                    else if (notif.header === "Stock receipt completed by QC Team") headerColor = "#27ae60";
+                    else if (notif.header === "Short Received by QC Team") headerColor = "#f39c12";
+
+                    html += `<div style="background: #f8f9fa; border: 1px solid #ccd1d9; border-radius: 6px; padding: 10px; margin-bottom: 8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                            <strong style="color: ${headerColor}; font-size: 12px;">${notif.header}</strong>
+                            <span style="font-size: 9px; color: #888;">${notif.time || ''}</span>
+                        </div>
+                        <div style="font-size: 11px; color: #333; margin-bottom: 2px;"><strong>Ref No:</strong> <span style="color: #8e44ad; font-weight: bold;">${notif.refNumber || '-'}</span></div>
+                        <div style="font-size: 11px; color: #555; white-space: pre-wrap; font-family: monospace; background: #fff; padding: 4px; border-radius: 3px; border: 1px solid #eee;">${notif.details || ''}</div>
+                    </div>`;
+                });
+                saveLocalOnly();
+                if (isFirebaseLoaded) {
+                    db.ref("LSP_REJECTED_SHIPMENT_TRACKER/notificationsDatabase").set(notificationsDatabase);
+                }
+                updateMakerNotificationBadge();
+            }
+            body.innerHTML = html;
+            document.getElementById('maker-notification-modal').style.display = 'flex';
+        };
+
+        window.closeMakerNotificationModal = function() {
+            document.getElementById('maker-notification-modal').style.display = 'none';
+        };
+
+        window.clearMakerNotifications = function() {
+            if (confirm("Are you sure you want to clear all notifications?")) {
+                notificationsDatabase = {};
+                saveLocalOnly();
+                if (isFirebaseLoaded) {
+                    db.ref("LSP_REJECTED_SHIPMENT_TRACKER/notificationsDatabase").remove();
+                }
+                updateMakerNotificationBadge();
+                openMakerNotificationModal();
+            }
+        };
+
         window.switchAdminTab = function(tabName) {
             document.querySelectorAll('.admin-tab-content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.admin-nav button').forEach(el => el.classList.remove('active'));
@@ -942,6 +1067,7 @@
         function updateManifestDbCount() {
             let el = document.getElementById('manifest-db-count');
             if(el) el.innerText = Object.keys(manifestDatabase || {}).length;
+            updateMakerViewVisibility();
         }
 
         // ==========================================
@@ -971,7 +1097,6 @@
 
                         if (!manifestDatabase) manifestDatabase = {};
                         
-                        // Parse Headers dynamically
                         let headers = parseCSVRow(lines[0]).map(h => h.trim().toUpperCase());
                         
                         let awbIdx = headers.indexOf("AWB NUMBER");
@@ -982,7 +1107,6 @@
                         let orderIdx = headers.indexOf("CHANNEL ORDER ID");
                         let dateIdx = headers.indexOf("MANIFEST CREATED TIME");
 
-                        // Fallbacks just in case the format slightly deviates
                         if(awbIdx === -1) awbIdx = 11;
                         if(bldIdx === -1) bldIdx = 1;
                         if(manifestIdx === -1) manifestIdx = 3;
@@ -1021,9 +1145,10 @@
 
                         syncManifestToFirebase();
                         updateManifestDbCount();
+                        updateMakerViewVisibility();
                         
                         let dbTotal = Object.keys(manifestDatabase).length;
-                        alert(`✅ MANIFEST UPLOAD SUCCESSFUL!\n${count} rows processed.\nTotal Unique AWBs in Database: ${dbTotal}`);
+                        alert(`✅ MANIFEST UPLOAD SUCCESSFUL!\n${count} rows processed.\nTotal Unique AWBs in Database: ${dbTotal}\n\nManifest uploaded successfully! Unified Bulk Upload section is now enabled.`);
                     } catch (error) {
                         alert("⚠️ Error processing file: " + error.message);
                     } finally {
@@ -1042,6 +1167,7 @@
                 db.ref("LSP_REJECTED_SHIPMENT_TRACKER/manifestDatabase").remove();
                 saveLocalOnly();
                 updateManifestDbCount();
+                updateMakerViewVisibility();
                 alert("MANIFEST DATABASE CLEARED SUCCESSFULLY!");
             }
         }
@@ -1237,53 +1363,14 @@
             let scanAwb = scanInput.value.trim().toUpperCase().replace(/[\.\#\$\/\[\]]/g, '');
             if (scanAwb === "") return;
 
-            let sessionBldg = sessionStorage.getItem("savedBldg");
-            let today = new Date();
-            let dd = String(today.getDate()).padStart(2, '0');
-            let mm = String(today.getMonth() + 1).padStart(2, '0');
-            let yyyy = today.getFullYear();
-            let formattedToday = `${dd}-${mm}-${yyyy}`;
-
             let existsInRef = savedShipments[scanAwb] && savedShipments[scanAwb].refNumber === checkerActiveRef;
 
             if (!existsInRef) {
-                let isDuplicateExcess = savedShipments[scanAwb] && savedShipments[scanAwb].refNumber === checkerActiveRef && savedShipments[scanAwb].status === "EXCESS";
-                if(isDuplicateExcess) {
-                    alert(`DUPLICATE SCAN! AWB ${scanAwb} is already in Excess for this Reference.`);
-                    scanInput.value = ""; return;
-                }
-
-                let row = (manifestDatabase && manifestDatabase[scanAwb]) ? manifestDatabase[scanAwb] : {};
-
-                savedShipments[scanAwb] = {
-                    slNo: serialCounter++,
-                    refNumber: checkerActiveRef,
-                    bldNo: row.bld || sessionBldg || '-',
-                    makerBldg: sessionBldg || '-',
-                    manifestId: row.manifest || '-',
-                    channel: row.channel || '-',
-                    transporter: row.transporter || '-',
-                    channelOrder: row.order || '-',
-                    manifestDate: row.date || '-',
-                    errSel: "-",
-                    errTxt: "EXCESS ENTRY",
-                    cancelDate: formattedToday,
-                    remarks: "EXCESS",
-                    rtoDate: formattedToday,
-                    status: "EXCESS",
-                    ageing: "0",
-                    isModified: true,
-                    receivingStatus: "EXCESS RECEIVED"
-                };
-
-                alert(`EXCESS RECEIVED!\nAWB: ${scanAwb}\nThis shipment does not belong to the loaded Reference Number.`);
+                // Invalid tracking ID for this reference number
+                alert("Invalid Tracking ID, Please inform the same to sender");
+                // Notify Maker with header "Excess Sent"
+                addMakerNotification("Excess Sent", checkerActiveRef, `Invalid/Excess Tracking ID scanned: ${scanAwb}`);
                 
-                let updates = {};
-                updates["savedShipments/" + scanAwb] = savedShipments[scanAwb];
-                syncMultipleShipments(updates);
-
-                refreshCheckerStats();
-                updateCheckerTable();
                 scanInput.value = "";
                 scanInput.focus();
                 return;
@@ -1310,6 +1397,38 @@
             updateCheckerTable();
             scanInput.value = "";
             scanInput.focus(); 
+        };
+
+        window.completeCheckerBatch = function() {
+            if (!checkerActiveRef) {
+                alert("Please load a reference number first.");
+                return;
+            }
+            if (!savedShipments) savedShipments = {};
+
+            let total = 0, pending = [];
+            Object.keys(savedShipments).forEach(awb => {
+                let s = savedShipments[awb];
+                if (s.refNumber === checkerActiveRef) {
+                    total++;
+                    if (!s.receivingStatus || !s.receivingStatus.includes("RECEIVED")) {
+                        pending.push(awb);
+                    }
+                }
+            });
+
+            if (total === 0) {
+                alert("No shipments found for this reference number.");
+                return;
+            }
+
+            if (pending.length === 0) {
+                addMakerNotification("Stock receipt completed by QC Team", checkerActiveRef, `All ${total} shipments successfully received and verified.`);
+                alert(`Batch QC completed successfully!\nNotification sent: Stock receipt completed by QC Team.`);
+            } else {
+                addMakerNotification("Short Received by QC Team", checkerActiveRef, `Short received! Pending/Missing Tracking IDs (AWBs):\n` + pending.join(", "));
+                alert(`Batch QC completed with SHORT items!\nNotification sent: Short Received by QC Team.\nPending count: ${pending.length}`);
+            }
         };
 
         window.updateCheckerTable = function() {
@@ -2273,6 +2392,14 @@
             document.getElementById("current-user-role").textContent = "ROLE: " + loggedInRole;
             document.getElementById("current-user-name").textContent = "USER: " + loggedInUser;
 
+            let notifBtn = document.getElementById("maker-notif-btn");
+            if (loggedInRole === "MAKER") {
+                notifBtn.style.display = "inline-block";
+                updateMakerNotificationBadge();
+            } else {
+                notifBtn.style.display = "none";
+            }
+
             let mBldFilter = document.getElementById('maker-filter-bld');
             let acBldFilter = document.getElementById('admin-checker-filter-bld');
             let amBldFilter = document.getElementById('admin-maker-filter-bld');
@@ -2313,10 +2440,10 @@
                 setTimeout(() => { document.getElementById('checker-ref-input').focus(); }, 100);
             } else { 
                 document.getElementById("maker-upload-block").style.display = "block";
-                document.getElementById("maker-view-container").style.display = "block";
                 document.getElementById("checker-layout").style.display = "none";
                 document.getElementById("admin-layout-block").style.display = "none";
                 
+                updateMakerViewVisibility();
                 updateDataTable();
             }
         }
@@ -2352,6 +2479,7 @@
                     savedShipments = data.savedShipments || {};
                     usersDatabase = data.usersDatabase || usersDatabase;
                     deletedLogsDatabase = data.deletedLogsDatabase || deletedLogsDatabase;
+                    notificationsDatabase = data.notificationsDatabase || notificationsDatabase;
                     serialCounter = data.serialCounter || 1;
                     globalRefCounter = data.globalRefCounter || 1;
                     adminEmails = data.adminEmails || "";
@@ -2380,6 +2508,7 @@
                     
                     if (document.getElementById("tracker-page").style.display === "block") {
                         updateDataTable();
+                        updateMakerViewVisibility();
                         if (loggedInRole === "CHECKER") {
                             refreshCheckerStats();
                             if(typeof updateCheckerTable === 'function') updateCheckerTable();
@@ -2388,6 +2517,8 @@
                             renderAdminDropdownManager();
                             renderAdminUsersTable();
                             renderDeletedLogsTable();
+                        } else if (loggedInRole === "MAKER") {
+                            updateMakerNotificationBadge();
                         }
                     }
                 }
@@ -2471,6 +2602,18 @@
                 }
                 saveLocalOnly();
                 if (loggedInRole === "ADMIN") renderDeletedLogsTable();
+            });
+
+            baseRef.child("notificationsDatabase").on('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    notificationsDatabase = snapshot.val() || {};
+                } else {
+                    notificationsDatabase = {};
+                }
+                saveLocalOnly();
+                if (loggedInRole === "MAKER" || loggedInRole === "ADMIN") {
+                    updateMakerNotificationBadge();
+                }
             });
 
             baseRef.child("serialCounter").on('value', function(snapshot) {
