@@ -231,10 +231,10 @@
             <span style="font-size: 10px; color: #555; display: block; margin-top: 5px;">Total Records in DB: <strong id="manifest-db-count">0</strong></span>
         </div>
 
-        <!-- MAKER VIEW (Hidden until manifest is uploaded) -->
+        <!-- MAKER VIEW -->
         <div id="maker-view-container" style="display: none;">
             <div class="main-layout" id="maker-layout-block">
-                <div class="form-side">
+                <div class="form-side" id="maker-form-side">
                     <!-- UNIFIED CSV UPLOAD SECTION -->
                     <div class="section-box" style="text-align: center; background-color: #eaf2f8; border-color: #8ec5fc;">
                         <h3 style="margin-bottom: 8px; color: #2980b9;">UNIFIED BULK DATA UPLOAD (CSV)</h3>
@@ -953,9 +953,14 @@
         function updateMakerViewVisibility() {
             let hasManifest = Object.keys(manifestDatabase || {}).length > 0;
             let container = document.getElementById('maker-view-container');
+            let formSide = document.getElementById('maker-form-side');
+            
             if (container) {
                 if (loggedInRole === "MAKER") {
-                    container.style.display = hasManifest ? 'block' : 'none';
+                    container.style.display = 'block';
+                    if (formSide) {
+                        formSide.style.display = hasManifest ? 'block' : 'none';
+                    }
                 } else if (loggedInRole === "ADMIN") {
                     container.style.display = 'none'; // Admin has admin layout
                 }
